@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "6.1"; 
+const APP_VERSION = "6.2"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
@@ -239,23 +239,27 @@ export default function App() {
   const handleCopyImageFromModal = async () => {
     if (!generatedImage) return;
     try {
+      // Пытаемся скопировать через Clipboard API v2
       const response = await fetch(generatedImage);
       const blob = await response.blob();
       
-      // Создаем жесткий PNG blob для буфера
-      const pngBlob = new Blob([blob], { type: 'image/png' });
-
-      // Проверяем поддержку
       if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
-          const item = new ClipboardItem({ 'image/png': pngBlob });
-          await navigator.clipboard.write([item]);
-          alert("✅ Картинка скопирована в буфер!\n\nТеперь просто нажмите 'Вставить' в поле ввода Telegram.");
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({ [blob.type]: blob })
+            ]);
+            alert("✅ Картинка скопирована!\n\nТеперь вставьте её в сообщение.");
+          } catch (writeError) {
+             console.warn("Write error:", writeError);
+             throw writeError; // Проваливаемся в catch
+          }
       } else {
           throw new Error('Clipboard API not supported');
       }
     } catch (err) {
       console.error(err);
-      alert("⚠️ Ваш телефон блокирует копирование картинок.\n\nПожалуйста, просто зажмите картинку пальцем на 2 секунды и выберите 'Копировать' или 'Поделиться'.");
+      // Фолбэк сообщение, так как JS не может насильно записать картинку в буфер на всех устройствах
+      alert("⚠️ Ваш телефон запрещает сайтам копировать картинки.\n\nРешение:\n1. Зажмите картинку пальцем (2 сек).\n2. В меню выберите 'Копировать изображение'.");
     }
   };
 
