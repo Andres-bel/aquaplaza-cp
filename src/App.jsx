@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Trash2, FileText, Copy, Check, Calculator, 
   User, Briefcase, Search, ArrowRight, Package, X,
   Sparkles, Percent, Wifi, RefreshCw, Loader2,
-  Save, FolderOpen, RotateCcw, Clock
+  Save, FolderOpen, RotateCcw, Clock, Download, Share, Image as ImageIcon
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "5.0"; 
+const APP_VERSION = "5.1"; 
 const API_URL = ''; 
 
 // --- ЗАПАСНЫЕ СТИЛИ ---
@@ -19,25 +19,36 @@ const FALLBACK_STYLES = `
   .input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
 `;
 
-// --- ЗАГРУЗЧИК СТИЛЕЙ ---
-const useStyleLoader = () => {
+// --- ЗАГРУЗЧИК СКРИПТОВ (Стили + html2canvas) ---
+const useExternalScripts = () => {
   const [loaded, setLoaded] = useState(false);
+  
   useEffect(() => {
+    // 1. Запасные стили
     const fallback = document.createElement('style');
     fallback.innerHTML = FALLBACK_STYLES;
     document.head.appendChild(fallback);
 
-    if (document.getElementById('tailwind-script')) {
-      setLoaded(true);
-      return;
+    // 2. Tailwind CSS
+    if (!document.getElementById('tailwind-script')) {
+      const script = document.createElement('script');
+      script.id = 'tailwind-script';
+      script.src = "https://cdn.tailwindcss.com";
+      document.head.appendChild(script);
     }
-    const script = document.createElement('script');
-    script.id = 'tailwind-script';
-    script.src = "https://cdn.tailwindcss.com";
-    script.onload = () => setLoaded(true);
-    script.onerror = () => setLoaded(true);
-    document.head.appendChild(script);
+
+    // 3. html2canvas (для скриншотов)
+    if (!document.getElementById('html2canvas-script')) {
+      const script = document.createElement('script');
+      script.id = 'html2canvas-script';
+      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+      script.onload = () => setLoaded(true);
+      document.head.appendChild(script);
+    } else {
+      setLoaded(true);
+    }
   }, []);
+  
   return loaded;
 };
 
@@ -94,13 +105,14 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
 };
 
 export default function App() {
-  const stylesLoaded = useStyleLoader();
+  const scriptsLoaded = useExternalScripts();
 
   const [activeTab, setActiveTab] = useState('editor');
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   
   // Данные КП
   const [clientName, setClientName] = useState('');
@@ -113,10 +125,12 @@ export default function App() {
   
   // Сохраненные КП (История)
   const [savedCPs, setSavedCPs] = useState([]);
+  
+  // Ref для скриншота
+  const receiptRef = useRef(null);
 
-  // --- ИНИЦИАЛИЗАЦИЯ И АВТО-ЗАГРУЗКА ---
+  // --- ИНИЦИАЛИЗАЦИЯ ---
   useEffect(() => {
-    // 1. Инициализация Telegram
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
       tg.ready();
@@ -125,14 +139,9 @@ export default function App() {
         setManagerName(`${tg.initDataUnsafe.user.first_name} (Aquaplaza)`);
       }
     }
-
-    // 2. Загрузка Истории из памяти
     const loadedHistory = localStorage.getItem('aquaplaza_history');
-    if (loadedHistory) {
-      try { setSavedCPs(JSON.parse(loadedHistory)); } catch (e) {}
-    }
+    if (loadedHistory) try { setSavedCPs(JSON.parse(loadedHistory)); } catch (e) {}
 
-    // 3. Восстановление Черновика (чтобы не терять данные при обновлении)
     const draft = localStorage.getItem('aquaplaza_draft');
     if (draft) {
       try {
@@ -146,56 +155,93 @@ export default function App() {
     }
   }, []);
 
-  // --- АВТО-СОХРАНЕНИЕ ЧЕРНОВИКА ---
   useEffect(() => {
     const draft = { items, clientName, globalDiscount };
     localStorage.setItem('aquaplaza_draft', JSON.stringify(draft));
   }, [items, clientName, globalDiscount]);
 
-  // --- ЛОГИКА ИСТОРИИ ---
-  const handleSaveToHistory = () => {
-    if (!clientName) {
-      alert('Пожалуйста, введите имя клиента, чтобы сохранить КП.');
+  // --- ЛОГИКА СОХРАНЕНИЯ КАРТИНКОЙ ---
+  const handleSaveImage = async () => {
+    if (!receiptRef.current || !window.html2canvas) {
+      alert("Инструмент для фото еще грузится, попробуйте через секунду.");
       return;
     }
-    
-    // Считаем сумму для превью
+
+    setIsGeneratingImage(true);
+
+    try {
+      // 1. Создаем скриншот
+      const canvas = await window.html2canvas(receiptRef.current, {
+        scale: 2, // Высокое качество (Retina)
+        backgroundColor: '#ffffff', // Белый фон
+        useCORS: true // Для загрузки внешних картинок (если будут)
+      });
+
+      // 2. Конвертируем в Blob (файл)
+      canvas.toBlob(async (blob) => {
+        if (!blob) throw new Error("Canvas is empty");
+        
+        const file = new File([blob], `kp_aquaplaza_${Date.now()}.png`, { type: 'image/png' });
+
+        // 3. Пытаемся поделиться через нативное меню (Mobile)
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'КП Aquaplaza',
+              text: `Коммерческое предложение для ${clientName}`
+            });
+            setIsGeneratingImage(false);
+            return;
+          } catch (shareError) {
+            console.log("Share failed or cancelled", shareError);
+          }
+        }
+
+        // 4. Если Share не сработал (Desktop) — просто скачиваем
+        const link = document.createElement('a');
+        link.href = canvas.toDataURL('image/png');
+        link.download = `kp_${clientName || 'client'}.png`;
+        link.click();
+        setIsGeneratingImage(false);
+
+      }, 'image/png');
+
+    } catch (error) {
+      console.error(error);
+      alert("Ошибка при создании картинки. Попробуйте еще раз.");
+      setIsGeneratingImage(false);
+    }
+  };
+
+  // --- ИСТОРИЯ ---
+  const handleSaveToHistory = () => {
+    if (!clientName) { alert('Введите имя клиента.'); return; }
     const sub = items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0);
     const tot = sub * (1 - globalDiscount/100);
-
     const newCP = {
       id: Date.now(),
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-      clientName,
-      items,
-      globalDiscount,
-      total: tot
+      clientName, items, globalDiscount, total: tot
     };
-
     const newHistory = [newCP, ...savedCPs];
     setSavedCPs(newHistory);
     localStorage.setItem('aquaplaza_history', JSON.stringify(newHistory));
-    
-    // Вибрация
-    if (window.Telegram?.WebApp?.HapticFeedback) {
-      window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-    }
-    alert('✅ КП сохранено в историю!');
+    if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+    alert('✅ Сохранено в историю!');
   };
 
   const handleLoadCP = (cp) => {
-    if (window.confirm(`Загрузить КП для "${cp.clientName}"? Текущие данные будут заменены.`)) {
-      setClientName(cp.clientName);
-      setItems(cp.items);
-      setGlobalDiscount(cp.globalDiscount);
+    if (window.confirm(`Загрузить "${cp.clientName}"?`)) {
+      setClientName(cp.clientName); setItems(cp.items); setGlobalDiscount(cp.globalDiscount);
       setShowHistoryModal(false);
     }
   };
 
   const handleDeleteCP = (e, id) => {
     e.stopPropagation();
-    if (window.confirm('Удалить это сохранение?')) {
+    if (window.confirm('Удалить?')) {
       const newHistory = savedCPs.filter(cp => cp.id !== id);
       setSavedCPs(newHistory);
       localStorage.setItem('aquaplaza_history', JSON.stringify(newHistory));
@@ -203,41 +249,32 @@ export default function App() {
   };
 
   const handleClear = () => {
-    if (window.confirm('Очистить форму и начать новое КП?')) {
-      setClientName('');
-      setGlobalDiscount(0);
+    if (window.confirm('Очистить форму?')) {
+      setClientName(''); setGlobalDiscount(0);
       setItems([{ sku: '', name: '', price: 0, qty: 1, discount: 0 }]);
     }
   };
 
-  // --- УМНЫЙ ПОИСК ---
+  // --- ПОИСК ---
   const handleSearch = async () => {
     if (!searchQuery) return;
     setIsSearching(true);
     const cleanSku = searchQuery.trim();
-
     try {
       let foundProduct = null;
       if (API_URL) {
         try {
           const response = await fetch(`${API_URL}?sku=${cleanSku}`);
           const data = await response.json();
-          if (data && (data.found || data.name)) {
-            foundProduct = { ...data, qty: 1, discount: 0, isAiGenerated: false };
-          }
+          if (data && (data.found || data.name)) foundProduct = { ...data, qty: 1, discount: 0, isAiGenerated: false };
         } catch (err) {}
       }
-
       if (!foundProduct) {
         await new Promise(r => setTimeout(r, 600));
-        foundProduct = { 
-          sku: cleanSku, name: `Товар арт. ${cleanSku} (Введите название)`, 
-          price: 0, qty: 1, discount: 0, isAiGenerated: true 
-        };
+        foundProduct = { sku: cleanSku, name: `Товар арт. ${cleanSku} (Введите название)`, price: 0, qty: 1, discount: 0, isAiGenerated: true };
       }
       setItems([...items, foundProduct]);
-      setShowSearchModal(false);
-      setSearchQuery('');
+      setShowSearchModal(false); setSearchQuery('');
     } catch (error) { alert("Ошибка поиска."); } 
     finally { setIsSearching(false); }
   };
@@ -247,20 +284,15 @@ export default function App() {
     setItems([...items, { sku: '', name: '', price: 0, qty: 1, discount: 0 }]);
     setShowSearchModal(false);
   };
-
   const updateItem = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
+    const newItems = [...items]; newItems[index][field] = value; setItems(newItems);
   };
-  
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
   
   const subtotal = items.reduce((sum, item) => {
     const itemPrice = item.price * (1 - (item.discount || 0) / 100);
     return sum + (itemPrice * item.qty);
   }, 0);
-
   const total = subtotal * (1 - globalDiscount / 100);
 
   const copyToClipboard = () => {
@@ -268,7 +300,6 @@ export default function App() {
     let text = `🌊 *Aquaplaza* | КП от ${date}\n`;
     if (clientName) text += `👤 Клиент: ${clientName}\n`;
     text += `\n`;
-    
     items.forEach((item, i) => {
       const itemPrice = item.price * (1 - (item.discount || 0) / 100);
       const totalItem = itemPrice * item.qty;
@@ -277,7 +308,6 @@ export default function App() {
       if (item.discount > 0) text += `   Цена: ${item.price.toLocaleString()} - ${item.discount}% = ${itemPrice.toLocaleString()} ₽\n`;
       text += `   ${item.qty} шт × ${itemPrice.toLocaleString()} = ${totalItem.toLocaleString()} ₽\n\n`;
     });
-    
     text += `------------------\n`;
     if (globalDiscount > 0) text += `Доп. скидка на чек: ${globalDiscount}%\n`;
     text += `💎 *ИТОГО: ${total.toLocaleString()} ₽*\n\n`;
@@ -287,36 +317,23 @@ export default function App() {
     try {
       const textArea = document.createElement("textarea");
       textArea.value = text;
-      textArea.style.position = "fixed";
-      textArea.style.left = "-9999px";
-      textArea.setAttribute('readonly', '');
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      success = document.execCommand('copy');
-      document.body.removeChild(textArea);
+      textArea.style.position = "fixed"; textArea.style.left = "-9999px"; textArea.setAttribute('readonly', '');
+      document.body.appendChild(textArea); textArea.focus(); textArea.select();
+      success = document.execCommand('copy'); document.body.removeChild(textArea);
     } catch (err) { success = false; }
 
-    if (success) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } else if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      });
-    } else {
-       alert("Скопируйте вручную");
-    }
+    if (success) { setCopied(true); setTimeout(() => setCopied(false), 2000); } 
+    else if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); } 
+    else { alert("Скопируйте вручную"); }
   };
 
   const handleReload = () => window.location.reload();
 
-  if (!stylesLoaded) {
+  if (!scriptsLoaded) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif' }}>
         <Loader2 className="animate-spin text-blue-600 mb-2" size={32} />
-        <div style={{ color: '#666' }}>Загрузка оформления...</div>
+        <div style={{ color: '#666' }}>Загрузка...</div>
       </div>
     );
   }
@@ -334,20 +351,11 @@ export default function App() {
               </button>
             </h1>
           </div>
-          
           <div className="flex gap-2">
-            <button 
-               onClick={() => setShowHistoryModal(true)} 
-               className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors relative"
-            >
+            <button onClick={() => setShowHistoryModal(true)} className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors relative">
                <FolderOpen size={20} />
-               {savedCPs.length > 0 && (
-                 <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
-                   {savedCPs.length}
-                 </span>
-               )}
+               {savedCPs.length > 0 && <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{savedCPs.length}</span>}
             </button>
-            
             <div className="flex bg-slate-100 p-1 rounded-xl">
               {['editor', 'preview'].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
@@ -359,53 +367,29 @@ export default function App() {
         </div>
       </div>
 
-      {/* CONTENT */}
       <div className="max-w-md mx-auto p-4 sm:p-5">
         {activeTab === 'editor' ? (
           <div className="space-y-4">
-            {/* Панель инструментов */}
             <div className="flex gap-2 overflow-x-auto pb-1">
                <button onClick={handleSaveToHistory} className="flex-1 bg-white border border-slate-200 text-slate-700 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-50 shadow-sm active:scale-95 transition-transform">
-                  <Save size={16} className="text-blue-600" />
-                  Сохранить КП
+                  <Save size={16} className="text-blue-600" /> Сохранить
                </button>
                <button onClick={handleClear} className="bg-white border border-slate-200 text-slate-400 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:text-red-500 hover:border-red-100 shadow-sm active:scale-95 transition-transform">
                   <RotateCcw size={16} />
                </button>
             </div>
-
-            {/* Клиент */}
             <div className="card">
-               <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider">
-                 <User size={14} /> Клиент
-               </div>
+               <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider"><User size={14} /> Клиент</div>
                <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя или название компании" className="w-full text-base font-medium text-slate-800 placeholder-slate-300 border-none focus:ring-0 p-0 outline-none" />
             </div>
-
-            {/* Товары */}
             <div>
-              <div className="flex justify-between items-center mb-2 px-1">
-                <span className="text-slate-400 text-xs uppercase font-bold tracking-wider flex items-center gap-2">
-                  <Package size={14} /> Товары ({items.length})
-                </span>
-              </div>
-              <div className="space-y-2">
-                {items.map((item, index) => (
-                  <ProductRow key={index} item={item} index={index} onUpdate={updateItem} onRemove={removeItem} />
-                ))}
-              </div>
-              <button onClick={() => setShowSearchModal(true)} className="btn btn-secondary w-full mt-3 py-3 bg-white border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 active:scale-95">
-                <Search size={16} /> Добавить товар
-              </button>
+              <div className="flex justify-between items-center mb-2 px-1"><span className="text-slate-400 text-xs uppercase font-bold tracking-wider flex items-center gap-2"><Package size={14} /> Товары ({items.length})</span></div>
+              <div className="space-y-2">{items.map((item, index) => (<ProductRow key={index} item={item} index={index} onUpdate={updateItem} onRemove={removeItem} />))}</div>
+              <button onClick={() => setShowSearchModal(true)} className="btn btn-secondary w-full mt-3 py-3 bg-white border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 active:scale-95"><Search size={16} /> Добавить товар</button>
             </div>
-
-            {/* Итого */}
             <div className="card mt-4">
               <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-sm text-slate-500">
-                  <span>Подытог</span>
-                  <span>{subtotal.toLocaleString()} ₽</span>
-                </div>
+                <div className="flex justify-between text-sm text-slate-500"><span>Подытог</span><span>{subtotal.toLocaleString()} ₽</span></div>
                 <div className="flex justify-between items-center text-sm text-slate-500">
                   <span className="flex items-center gap-1"><Percent size={14}/> Общая скидка</span>
                   <div className="flex items-center bg-orange-50 rounded px-2">
@@ -414,16 +398,14 @@ export default function App() {
                   </div>
                 </div>
               </div>
-              <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
-                <span className="text-slate-400 font-medium text-sm">Итого к оплате</span>
-                <span className="text-xl font-bold text-slate-900">{total.toLocaleString()} ₽</span>
-              </div>
+              <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline"><span className="text-slate-400 font-medium text-sm">Итого к оплате</span><span className="text-xl font-bold text-slate-900">{total.toLocaleString()} ₽</span></div>
             </div>
           </div>
         ) : (
           /* PREVIEW */
           <div className="animate-in fade-in zoom-in-95 duration-300 pb-10">
-            <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-slate-100 mb-6">
+            {/* Обертка для скриншота - ref вешаем сюда */}
+            <div ref={receiptRef} className="bg-white rounded-xl overflow-hidden shadow-lg border border-slate-100 mb-6">
               <div className="bg-blue-600 px-6 py-6 text-white">
                  <div className="flex justify-between items-start mb-4">
                    <div className="opacity-80 text-xs font-bold uppercase tracking-wider">Коммерческое предложение</div>
@@ -462,17 +444,31 @@ export default function App() {
                       <span className="font-bold">-{globalDiscount}%</span>
                    </div>
                 )}
+                <div className="mt-8 pt-4 border-t border-slate-50 text-center">
+                   <p className="text-[10px] text-slate-400">Цены действительны 3 дня. Aquaplaza Online.</p>
+                </div>
               </div>
             </div>
-            <button onClick={copyToClipboard} className={`btn btn-primary w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-blue-600 text-white active:scale-95'}`}>
-              {copied ? <Check size={20} /> : <Copy size={20} />}
-              {copied ? 'Скопировано!' : 'Скопировать текст'}
-            </button>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={copyToClipboard} className={`btn w-full py-3.5 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-white text-slate-700 border border-slate-200 active:scale-95'}`}>
+                {copied ? <Check size={18} /> : <Copy size={18} />}
+                {copied ? 'Скопировано!' : 'Текст'}
+              </button>
+
+              <button 
+                onClick={handleSaveImage} 
+                disabled={isGeneratingImage}
+                className="btn w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/20 bg-blue-600 text-white flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70 disabled:scale-100"
+              >
+                {isGeneratingImage ? <Loader2 size={18} className="animate-spin"/> : <ImageIcon size={18} />}
+                {isGeneratingImage ? 'Создаю...' : 'Как фото'}
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* SEARCH MODAL */}
       {showSearchModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl p-5 shadow-2xl animate-in slide-in-from-bottom-10">
@@ -490,47 +486,25 @@ export default function App() {
         </div>
       )}
 
-      {/* HISTORY MODAL */}
       {showHistoryModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white w-full max-w-md sm:rounded-t-2xl h-[80vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-10">
              <div className="flex justify-between items-center p-5 border-b border-slate-100">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                  <FolderOpen size={20} className="text-blue-600"/> История ({savedCPs.length})
-                </h3>
+                <h3 className="font-bold text-slate-800 flex items-center gap-2"><FolderOpen size={20} className="text-blue-600"/> История ({savedCPs.length})</h3>
                 <button onClick={() => setShowHistoryModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500"><X size={20} /></button>
              </div>
-             
              <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
-               {savedCPs.length === 0 ? (
-                 <div className="text-center text-slate-400 mt-10">
-                   <FolderOpen size={48} className="mx-auto mb-3 opacity-20"/>
-                   <p>Здесь пока пусто</p>
-                 </div>
-               ) : (
-                 savedCPs.map((cp) => (
+               {savedCPs.length === 0 ? <div className="text-center text-slate-400 mt-10"><FolderOpen size={48} className="mx-auto mb-3 opacity-20"/><p>Пусто</p></div> : savedCPs.map((cp) => (
                    <div key={cp.id} onClick={() => handleLoadCP(cp)} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 active:scale-[0.98] transition-transform cursor-pointer">
-                     <div className="flex justify-between items-start mb-2">
-                       <h4 className="font-bold text-slate-800">{cp.clientName}</h4>
-                       <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-full">{cp.total.toLocaleString()} ₽</span>
-                     </div>
-                     <div className="flex justify-between items-end">
-                       <div className="text-xs text-slate-400 flex items-center gap-1">
-                          <Clock size={12}/> {cp.date} в {cp.time} • {cp.items.length} поз.
-                       </div>
-                       <button onClick={(e) => handleDeleteCP(e, cp.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                         <Trash2 size={16} />
-                       </button>
-                     </div>
+                     <div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">{cp.clientName}</h4><span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-full">{cp.total.toLocaleString()} ₽</span></div>
+                     <div className="flex justify-between items-end"><div className="text-xs text-slate-400 flex items-center gap-1"><Clock size={12}/> {cp.date} • {cp.items.length} поз.</div><button onClick={(e) => handleDeleteCP(e, cp.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button></div>
                    </div>
-                 ))
-               )}
+                 ))}
              </div>
           </div>
         </div>
       )}
 
-      {/* FAB */}
       {activeTab === 'editor' && (
         <div className="fixed bottom-6 left-0 right-0 px-5 max-w-md mx-auto z-10 pointer-events-none">
           <button onClick={() => setActiveTab('preview')} className="btn btn-primary pointer-events-auto w-full bg-blue-600 text-white py-3.5 rounded-xl shadow-lg shadow-blue-500/30 font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
