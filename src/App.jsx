@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "5.6"; 
+const APP_VERSION = "5.7"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
@@ -190,41 +190,52 @@ export default function App() {
     return text;
   };
 
-  const handleShareTelegram = async () => {
-    const text = generateCPText();
+  // --- ГЛАВНАЯ ФУНКЦИЯ ОТПРАВКИ ФОТО ---
+  const handleShareImage = async () => {
+    if (!receiptRef.current || !window.html2canvas) { alert("Подготовка..."); return; }
     
-    // 1. Пробуем системную шторку "Поделиться" (самый мягкий вариант)
-    if (navigator.share && navigator.canShare && navigator.canShare({ text })) {
-      try {
-        await navigator.share({
-          title: 'КП Aquaplaza',
-          text: text
-        });
-        return; // Если получилось, не продолжаем
-      } catch (e) {
-        console.log('Native share failed/cancelled, trying fallback');
-      }
-    }
-
-    // 2. Фолбэк: Обычная ссылка (window.open реже закрывает TWA чем openTelegramLink)
-    const url = `https://t.me/share/url?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
-  };
-
-  const handleSaveImage = async () => {
-    if (!receiptRef.current || !window.html2canvas) { alert("Грузится..."); return; }
     setIsGeneratingImage(true);
+    
     try {
-      const canvas = await window.html2canvas(receiptRef.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+      // 1. Генерируем картинку
+      const canvas = await window.html2canvas(receiptRef.current, { 
+        scale: 2, 
+        backgroundColor: '#ffffff', 
+        useCORS: true 
+      });
+      
       canvas.toBlob(async (blob) => {
-        if (!blob) throw new Error("Empty");
+        if (!blob) throw new Error("Empty blob");
         const file = new File([blob], `kp_aquaplaza_${Date.now()}.png`, { type: 'image/png' });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try { await navigator.share({ files: [file], title: 'КП Aquaplaza' }); setIsGeneratingImage(false); return; } catch (e) {}
+
+        // 2. Пытаемся отправить через системное меню (Нативный способ)
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'КП Aquaplaza'
+            });
+          } catch (e) {
+            console.log('Share cancelled');
+          }
+        } 
+        else {
+          // 3. Если мы на ПК или браузер старый - просто скачиваем
+          const link = document.createElement('a'); 
+          link.href = canvas.toDataURL('image/png'); 
+          link.download = `kp_${clientName || 'client'}.png`; 
+          link.click();
+          alert("Фото сохранено! Теперь отправьте его в Telegram.");
         }
-        const link = document.createElement('a'); link.href = canvas.toDataURL('image/png'); link.download = `kp.png`; link.click(); setIsGeneratingImage(false);
+        
+        setIsGeneratingImage(false);
       }, 'image/png');
-    } catch (error) { alert("Ошибка фото"); setIsGeneratingImage(false); }
+      
+    } catch (error) {
+      console.error(error);
+      alert("Ошибка при создании фото");
+      setIsGeneratingImage(false);
+    }
   };
 
   const handleSaveToHistory = () => {
@@ -439,21 +450,23 @@ export default function App() {
             </div>
             
             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-              <button onClick={handleShareTelegram} className="app-btn app-btn-primary" style={{ fontSize:'16px' }}>
-                <Send size={20} /> Отправить в Telegram
+              <button 
+                onClick={handleShareImage} 
+                className="app-btn app-btn-primary" 
+                style={{ fontSize:'16px' }}
+                disabled={isGeneratingImage}
+              >
+                {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                {isGeneratingImage ? 'Создаю фото...' : 'Отправить в Telegram (Фото)'}
               </button>
 
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
-                <button onClick={copyToClipboard} className="app-btn app-btn-secondary">
-                  {copied ? <Check size={18} /> : <Copy size={18} />}
-                  {copied ? 'Скопировано' : 'Текст'}
-                </button>
-
-                <button onClick={handleSaveImage} disabled={isGeneratingImage} className="app-btn app-btn-secondary" style={{ opacity: isGeneratingImage ? 0.7 : 1 }}>
-                  {isGeneratingImage ? <Loader2 size={18} className="animate-spin"/> : <ImageIcon size={18} />}
-                  {isGeneratingImage ? 'Создаю...' : 'Как фото'}
-                </button>
-              </div>
+              <button 
+                onClick={copyToClipboard} 
+                className="app-btn app-btn-secondary"
+              >
+                {copied ? <Check size={18} /> : <Copy size={18} />}
+                {copied ? 'Скопировать текст' : 'Скопировать текст'}
+              </button>
             </div>
           </div>
         )}
