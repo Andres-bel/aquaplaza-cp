@@ -4,11 +4,11 @@ import {
   User, Briefcase, Search, ArrowRight, Package, X,
   Sparkles, Percent, Wifi, RefreshCw, Loader2,
   Save, FolderOpen, RotateCcw, Clock, Download, Share, 
-  Image as ImageIcon, Send
+  Image as ImageIcon, Send, Share2
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "6.2"; 
+const APP_VERSION = "6.3"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
@@ -198,7 +198,8 @@ export default function App() {
     return text;
   };
 
-  const handleShareImage = async () => {
+  // --- ЛОГИКА ШАРИНГА ---
+  const handleShareFile = async () => {
     if (!receiptRef.current || !window.html2canvas) { alert("Подготовка..."); return; }
     
     setIsGeneratingImage(true);
@@ -214,14 +215,22 @@ export default function App() {
         if (!blob) throw new Error("Empty blob");
         const file = new File([blob], `kp_aquaplaza_${Date.now()}.png`, { type: 'image/png' });
 
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        // 1. Сначала пробуем нативный шаринг ФАЙЛОМ (самый надежный для мобилок)
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
-            await navigator.share({ files: [file], title: 'КП Aquaplaza' });
+            await navigator.share({
+              files: [file],
+              title: 'Коммерческое предложение',
+              text: `КП для ${clientName || 'клиента'}`
+            });
             setIsGeneratingImage(false);
-            return; 
-          } catch (e) {}
+            return;
+          } catch (e) {
+            console.log('Share cancelled');
+          }
         } 
         
+        // 2. Если не сработало (например, десктоп) - открываем модалку для ручного сохранения
         const dataUrl = canvas.toDataURL('image/png');
         setGeneratedImage(dataUrl);
         setShowImageModal(true);
@@ -231,35 +240,8 @@ export default function App() {
       
     } catch (error) {
       console.error(error);
-      alert("Ошибка при создании фото");
+      alert("Ошибка генерации");
       setIsGeneratingImage(false);
-    }
-  };
-
-  const handleCopyImageFromModal = async () => {
-    if (!generatedImage) return;
-    try {
-      // Пытаемся скопировать через Clipboard API v2
-      const response = await fetch(generatedImage);
-      const blob = await response.blob();
-      
-      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
-          try {
-            await navigator.clipboard.write([
-              new ClipboardItem({ [blob.type]: blob })
-            ]);
-            alert("✅ Картинка скопирована!\n\nТеперь вставьте её в сообщение.");
-          } catch (writeError) {
-             console.warn("Write error:", writeError);
-             throw writeError; // Проваливаемся в catch
-          }
-      } else {
-          throw new Error('Clipboard API not supported');
-      }
-    } catch (err) {
-      console.error(err);
-      // Фолбэк сообщение, так как JS не может насильно записать картинку в буфер на всех устройствах
-      alert("⚠️ Ваш телефон запрещает сайтам копировать картинки.\n\nРешение:\n1. Зажмите картинку пальцем (2 сек).\n2. В меню выберите 'Копировать изображение'.");
     }
   };
 
@@ -475,23 +457,28 @@ export default function App() {
             </div>
             
             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+              {/* ГЛАВНАЯ КНОПКА - Share File */}
               <button 
-                onClick={handleShareImage} 
+                onClick={handleShareFile} 
                 className="app-btn app-btn-primary" 
                 style={{ fontSize:'16px' }}
                 disabled={isGeneratingImage}
               >
-                {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-                {isGeneratingImage ? 'Создаю фото...' : 'Отправить в Telegram'}
+                {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Share2 size={20} />}
+                {isGeneratingImage ? 'Создаю фото...' : '📤 Отправить файлом'}
               </button>
 
-              <button 
-                onClick={copyToClipboard} 
-                className="app-btn app-btn-secondary"
-              >
-                {copied ? <Check size={18} /> : <Copy size={18} />}
-                {copied ? 'Скопировать текст' : 'Скопировать текст'}
-              </button>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+                <button onClick={copyToClipboard} className="app-btn app-btn-secondary">
+                  {copied ? <Check size={18} /> : <Copy size={18} />}
+                  {copied ? 'Текст' : 'Текст'}
+                </button>
+
+                {/* Фолбэк кнопка для ПК */}
+                <button onClick={() => { setIsGeneratingImage(true); handleShareFile(); }} className="app-btn app-btn-secondary">
+                   <ImageIcon size={18} /> Показать
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -540,18 +527,15 @@ export default function App() {
              <h3 className="text-bold" style={{ marginBottom:'12px', fontSize:'18px' }}>Готово!</h3>
              <img src={generatedImage} alt="КП" style={{ width:'100%', borderRadius:'8px', border:'1px solid #e5e7eb', marginBottom:'16px' }} />
              
-             <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={handleCopyImageFromModal} className="app-btn app-btn-primary" style={{flex: 1}}>
-                   <Copy size={18}/> Скопировать
-                </button>
-                <button onClick={() => setShowImageModal(false)} className="app-btn app-btn-secondary" style={{width: 'auto'}}>
-                   <X size={18}/>
-                </button>
-             </div>
-             
-             <p className="text-xs text-gray" style={{ marginTop:'12px' }}>
-                Если кнопка не сработала, зажмите картинку пальцем.
+             <p className="text-sm text-bold text-blue" style={{ marginBottom:'8px' }}>
+                👇 Как отправить?
              </p>
+             <p className="text-xs text-gray" style={{ marginBottom:'16px', lineHeight:'1.5' }}>
+                1. Зажмите картинку пальцем на 2 сек.<br/>
+                2. Выберите "Поделиться" или "Копировать".
+             </p>
+             
+             <button onClick={() => setShowImageModal(false)} className="app-btn app-btn-secondary">Закрыть</button>
           </div>
         </div>
       )}
