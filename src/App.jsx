@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "5.7"; 
+const APP_VERSION = "5.8"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
@@ -127,6 +127,10 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   
+  // Для модалки с картинкой
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState(null);
+  
   // Данные
   const [clientName, setClientName] = useState('');
   const [managerName, setManagerName] = useState('Менеджер Aquaplaza');
@@ -197,7 +201,6 @@ export default function App() {
     setIsGeneratingImage(true);
     
     try {
-      // 1. Генерируем картинку
       const canvas = await window.html2canvas(receiptRef.current, { 
         scale: 2, 
         backgroundColor: '#ffffff', 
@@ -208,27 +211,27 @@ export default function App() {
         if (!blob) throw new Error("Empty blob");
         const file = new File([blob], `kp_aquaplaza_${Date.now()}.png`, { type: 'image/png' });
 
-        // 2. Пытаемся отправить через системное меню (Нативный способ)
+        // План А: Пытаемся отправить через нативное меню
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
             await navigator.share({
               files: [file],
               title: 'КП Aquaplaza'
             });
+            setIsGeneratingImage(false);
+            return; 
           } catch (e) {
-            console.log('Share cancelled');
+            console.log('Share cancelled/failed, using fallback');
           }
         } 
-        else {
-          // 3. Если мы на ПК или браузер старый - просто скачиваем
-          const link = document.createElement('a'); 
-          link.href = canvas.toDataURL('image/png'); 
-          link.download = `kp_${clientName || 'client'}.png`; 
-          link.click();
-          alert("Фото сохранено! Теперь отправьте его в Telegram.");
-        }
         
+        // План Б: Если не вышло (или мы на ПК), показываем картинку внутри приложения
+        // Это безопасно и не закроет приложение
+        const dataUrl = canvas.toDataURL('image/png');
+        setGeneratedImage(dataUrl);
+        setShowImageModal(true);
         setIsGeneratingImage(false);
+
       }, 'image/png');
       
     } catch (error) {
@@ -457,7 +460,7 @@ export default function App() {
                 disabled={isGeneratingImage}
               >
                 {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-                {isGeneratingImage ? 'Создаю фото...' : 'Отправить в Telegram (Фото)'}
+                {isGeneratingImage ? 'Создаю фото...' : 'Отправить в Telegram'}
               </button>
 
               <button 
@@ -504,6 +507,20 @@ export default function App() {
                    </div>
                  ))}
              </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- МОДАЛЬНОЕ ОКНО С КАРТИНКОЙ (БЕЗОПАСНЫЙ РЕЖИМ) --- */}
+      {showImageModal && generatedImage && (
+        <div style={{ position:'fixed', inset:0, zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.8)', backdropFilter:'blur(5px)' }} onClick={() => setShowImageModal(false)}>
+          <div style={{ width:'90%', maxWidth:'400px', background:'white', borderRadius:'16px', padding:'20px', textAlign:'center' }} onClick={e => e.stopPropagation()}>
+             <h3 className="text-bold" style={{ marginBottom:'12px', fontSize:'18px' }}>Готово!</h3>
+             <p className="text-sm text-gray" style={{ marginBottom:'16px' }}>
+                Зажмите картинку ниже, чтобы <b>«Скопировать»</b> или <b>«Сохранить»</b>, а затем отправьте в Telegram.
+             </p>
+             <img src={generatedImage} alt="КП" style={{ width:'100%', borderRadius:'8px', border:'1px solid #e5e7eb', marginBottom:'16px' }} />
+             <button onClick={() => setShowImageModal(false)} className="app-btn app-btn-secondary">Закрыть</button>
           </div>
         </div>
       )}
