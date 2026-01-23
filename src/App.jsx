@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Trash2, FileText, Copy, Check, Calculator, 
   User, Briefcase, Search, ArrowRight, Package, X,
-  Sparkles, Percent, Wifi, RefreshCw, Loader2
+  Sparkles, Percent, Wifi, RefreshCw, Loader2,
+  Save, FolderOpen, RotateCcw, Clock
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "4.3"; 
+const APP_VERSION = "5.0"; 
 const API_URL = ''; 
 
-// --- ЗАПАСНЫЕ СТИЛИ (Если Tailwind не загрузится) ---
+// --- ЗАПАСНЫЕ СТИЛИ ---
 const FALLBACK_STYLES = `
   body { font-family: -apple-system, sans-serif; background: #f0f2f5; color: #333; margin: 0; padding-bottom: 80px; }
   .btn { padding: 12px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px; }
@@ -21,45 +22,32 @@ const FALLBACK_STYLES = `
 // --- ЗАГРУЗЧИК СТИЛЕЙ ---
 const useStyleLoader = () => {
   const [loaded, setLoaded] = useState(false);
-
   useEffect(() => {
-    // 1. Добавляем запасные стили сразу
     const fallback = document.createElement('style');
     fallback.innerHTML = FALLBACK_STYLES;
     document.head.appendChild(fallback);
 
-    // 2. Пытаемся загрузить красивые стили (Tailwind)
     if (document.getElementById('tailwind-script')) {
       setLoaded(true);
       return;
     }
-
     const script = document.createElement('script');
     script.id = 'tailwind-script';
     script.src = "https://cdn.tailwindcss.com";
-    script.onload = () => {
-      console.log("Tailwind loaded!");
-      setLoaded(true);
-    };
-    script.onerror = () => {
-      console.error("Tailwind failed to load");
-      setLoaded(true); // Все равно показываем приложение, но с запасными стилями
-    };
+    script.onload = () => setLoaded(true);
+    script.onerror = () => setLoaded(true);
     document.head.appendChild(script);
   }, []);
-
   return loaded;
 };
 
 // --- КОМПОНЕНТЫ ---
-
 const ProductRow = ({ item, onUpdate, onRemove, index }) => {
   const finalPrice = item.price * (1 - (item.discount || 0) / 100);
   const totalItemSum = finalPrice * item.qty;
 
   return (
     <div className="card group relative animate-in fade-in slide-in-from-bottom-2 duration-300">
-      {/* Верхняя строка: Название */}
       <div className="flex justify-between items-start gap-3 mb-2">
         <div className="flex-1 min-w-0">
            {item.sku && (
@@ -77,52 +65,25 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
              style={{ minHeight: '24px' }}
            />
         </div>
-        <button 
-          onClick={() => onRemove(index)}
-          className="text-gray-300 hover:text-red-500 p-1.5 -mr-1 transition-colors"
-        >
+        <button onClick={() => onRemove(index)} className="text-gray-300 hover:text-red-500 p-1.5 -mr-1 transition-colors">
           <Trash2 size={16} />
         </button>
       </div>
-      
-      {/* Нижняя строка: Цифры */}
       <div className="flex items-center gap-2 bg-gray-50/80 p-2 rounded-lg text-xs sm:text-sm">
         <div className="flex-1 relative min-w-[60px]">
           <span className="text-[9px] text-gray-400 block mb-0.5">Цена</span>
-          <input
-            type="number"
-            value={item.price === 0 ? '' : item.price}
-            onChange={(e) => onUpdate(index, 'price', parseFloat(e.target.value) || 0)}
-            placeholder="0"
-            className="w-full bg-transparent font-semibold text-gray-700 border-none focus:ring-0 p-0 outline-none"
-          />
+          <input type="number" value={item.price === 0 ? '' : item.price} onChange={(e) => onUpdate(index, 'price', parseFloat(e.target.value) || 0)} placeholder="0" className="w-full bg-transparent font-semibold text-gray-700 border-none focus:ring-0 p-0 outline-none" />
         </div>
-        
         <div className="w-px h-6 bg-gray-200"></div>
-        
         <div className="w-12 text-center">
           <span className="text-[9px] text-gray-400 block mb-0.5">Скидка%</span>
-          <input
-            type="number"
-            placeholder="-"
-            value={item.discount || ''}
-            onChange={(e) => onUpdate(index, 'discount', parseFloat(e.target.value) || 0)}
-            className="w-full bg-transparent text-center font-semibold text-orange-500 border-none focus:ring-0 p-0 placeholder-gray-300 outline-none"
-          />
+          <input type="number" placeholder="-" value={item.discount || ''} onChange={(e) => onUpdate(index, 'discount', parseFloat(e.target.value) || 0)} className="w-full bg-transparent text-center font-semibold text-orange-500 border-none focus:ring-0 p-0 placeholder-gray-300 outline-none" />
         </div>
-        
         <div className="w-px h-6 bg-gray-200"></div>
-        
         <div className="w-10 text-center">
           <span className="text-[9px] text-gray-400 block mb-0.5">Шт</span>
-          <input
-            type="number"
-            value={item.qty}
-            onChange={(e) => onUpdate(index, 'qty', parseInt(e.target.value) || 1)}
-            className="w-full bg-transparent text-center font-semibold text-gray-700 border-none focus:ring-0 p-0 outline-none"
-          />
+          <input type="number" value={item.qty} onChange={(e) => onUpdate(index, 'qty', parseInt(e.target.value) || 1)} className="w-full bg-transparent text-center font-semibold text-gray-700 border-none focus:ring-0 p-0 outline-none" />
         </div>
-        
         <div className="min-w-[70px] text-right pl-2 border-l border-transparent">
            <span className="text-[9px] text-gray-400 block mb-0.5">Сумма</span>
            <div className="font-bold text-blue-600 leading-none">{totalItemSum.toLocaleString()}</div>
@@ -133,13 +94,15 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
 };
 
 export default function App() {
-  const stylesLoaded = useStyleLoader(); // Загружаем стили
+  const stylesLoaded = useStyleLoader();
 
   const [activeTab, setActiveTab] = useState('editor');
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   
+  // Данные КП
   const [clientName, setClientName] = useState('');
   const [managerName, setManagerName] = useState('Менеджер Aquaplaza');
   const [globalDiscount, setGlobalDiscount] = useState(0);
@@ -147,8 +110,13 @@ export default function App() {
     { sku: '32843000', name: 'Смеситель для кухни Grohe (Пример)', price: 12400, qty: 1, discount: 0, isAiGenerated: true }
   ]);
   const [copied, setCopied] = useState(false);
+  
+  // Сохраненные КП (История)
+  const [savedCPs, setSavedCPs] = useState([]);
 
+  // --- ИНИЦИАЛИЗАЦИЯ И АВТО-ЗАГРУЗКА ---
   useEffect(() => {
+    // 1. Инициализация Telegram
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
       tg.ready();
@@ -157,7 +125,90 @@ export default function App() {
         setManagerName(`${tg.initDataUnsafe.user.first_name} (Aquaplaza)`);
       }
     }
+
+    // 2. Загрузка Истории из памяти
+    const loadedHistory = localStorage.getItem('aquaplaza_history');
+    if (loadedHistory) {
+      try { setSavedCPs(JSON.parse(loadedHistory)); } catch (e) {}
+    }
+
+    // 3. Восстановление Черновика (чтобы не терять данные при обновлении)
+    const draft = localStorage.getItem('aquaplaza_draft');
+    if (draft) {
+      try {
+        const d = JSON.parse(draft);
+        if (d.items && d.items.length > 0) {
+          setItems(d.items);
+          setClientName(d.clientName || '');
+          setGlobalDiscount(d.globalDiscount || 0);
+        }
+      } catch (e) {}
+    }
   }, []);
+
+  // --- АВТО-СОХРАНЕНИЕ ЧЕРНОВИКА ---
+  useEffect(() => {
+    const draft = { items, clientName, globalDiscount };
+    localStorage.setItem('aquaplaza_draft', JSON.stringify(draft));
+  }, [items, clientName, globalDiscount]);
+
+  // --- ЛОГИКА ИСТОРИИ ---
+  const handleSaveToHistory = () => {
+    if (!clientName) {
+      alert('Пожалуйста, введите имя клиента, чтобы сохранить КП.');
+      return;
+    }
+    
+    // Считаем сумму для превью
+    const sub = items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0);
+    const tot = sub * (1 - globalDiscount/100);
+
+    const newCP = {
+      id: Date.now(),
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+      clientName,
+      items,
+      globalDiscount,
+      total: tot
+    };
+
+    const newHistory = [newCP, ...savedCPs];
+    setSavedCPs(newHistory);
+    localStorage.setItem('aquaplaza_history', JSON.stringify(newHistory));
+    
+    // Вибрация
+    if (window.Telegram?.WebApp?.HapticFeedback) {
+      window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+    }
+    alert('✅ КП сохранено в историю!');
+  };
+
+  const handleLoadCP = (cp) => {
+    if (window.confirm(`Загрузить КП для "${cp.clientName}"? Текущие данные будут заменены.`)) {
+      setClientName(cp.clientName);
+      setItems(cp.items);
+      setGlobalDiscount(cp.globalDiscount);
+      setShowHistoryModal(false);
+    }
+  };
+
+  const handleDeleteCP = (e, id) => {
+    e.stopPropagation();
+    if (window.confirm('Удалить это сохранение?')) {
+      const newHistory = savedCPs.filter(cp => cp.id !== id);
+      setSavedCPs(newHistory);
+      localStorage.setItem('aquaplaza_history', JSON.stringify(newHistory));
+    }
+  };
+
+  const handleClear = () => {
+    if (window.confirm('Очистить форму и начать новое КП?')) {
+      setClientName('');
+      setGlobalDiscount(0);
+      setItems([{ sku: '', name: '', price: 0, qty: 1, discount: 0 }]);
+    }
+  };
 
   // --- УМНЫЙ ПОИСК ---
   const handleSearch = async () => {
@@ -172,43 +223,26 @@ export default function App() {
           const response = await fetch(`${API_URL}?sku=${cleanSku}`);
           const data = await response.json();
           if (data && (data.found || data.name)) {
-            foundProduct = {
-              sku: data.sku || cleanSku,
-              name: data.name,
-              price: parseFloat(data.price) || 0,
-              qty: 1,
-              discount: 0,
-              isAiGenerated: false 
-            };
+            foundProduct = { ...data, qty: 1, discount: 0, isAiGenerated: false };
           }
-        } catch (err) { console.log("API unavailable"); }
+        } catch (err) {}
       }
 
       if (!foundProduct) {
         await new Promise(r => setTimeout(r, 600));
         foundProduct = { 
-          sku: cleanSku, 
-          name: `Товар арт. ${cleanSku} (Введите название)`, 
-          price: 0, 
-          qty: 1, 
-          discount: 0,
-          isAiGenerated: true 
+          sku: cleanSku, name: `Товар арт. ${cleanSku} (Введите название)`, 
+          price: 0, qty: 1, discount: 0, isAiGenerated: true 
         };
-        if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('warning');
-      } else {
-        if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
       }
-
       setItems([...items, foundProduct]);
       setShowSearchModal(false);
       setSearchQuery('');
-    } catch (error) {
-      alert("Ошибка поиска.");
-    } finally {
-      setIsSearching(false);
-    }
+    } catch (error) { alert("Ошибка поиска."); } 
+    finally { setIsSearching(false); }
   };
 
+  // --- BASE LOGIC ---
   const handleManualAdd = () => {
     setItems([...items, { sku: '', name: '', price: 0, qty: 1, discount: 0 }]);
     setShowSearchModal(false);
@@ -278,7 +312,6 @@ export default function App() {
 
   const handleReload = () => window.location.reload();
 
-  // Если стили еще не загрузились - показываем экран загрузки
   if (!stylesLoaded) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif' }}>
@@ -291,22 +324,37 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-24 selection:bg-blue-100">
       {/* HEADER */}
-      <div className="bg-white/80 backdrop-blur-md px-5 pt-12 pb-4 shadow-sm sticky top-0 z-20 border-b border-slate-100">
+      <div className="bg-white/80 backdrop-blur-md px-4 pt-12 pb-3 shadow-sm sticky top-0 z-20 border-b border-slate-100">
         <div className="flex justify-between items-center max-w-md mx-auto">
           <div>
             <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2">
               КП Менеджер
               <button onClick={handleReload} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1 hover:bg-slate-200">
-                 v{APP_VERSION} <RefreshCw size={8}/>
+                 v{APP_VERSION}
               </button>
             </h1>
           </div>
-          <div className="flex bg-slate-100 p-1 rounded-lg">
-            {['editor', 'preview'].map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-                {tab === 'editor' ? 'Редактор' : 'Просмотр'}
-              </button>
-            ))}
+          
+          <div className="flex gap-2">
+            <button 
+               onClick={() => setShowHistoryModal(true)} 
+               className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors relative"
+            >
+               <FolderOpen size={20} />
+               {savedCPs.length > 0 && (
+                 <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold">
+                   {savedCPs.length}
+                 </span>
+               )}
+            </button>
+            
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              {['editor', 'preview'].map(tab => (
+                <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  {tab === 'editor' ? 'Ред.' : 'Вид'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -315,18 +363,23 @@ export default function App() {
       <div className="max-w-md mx-auto p-4 sm:p-5">
         {activeTab === 'editor' ? (
           <div className="space-y-4">
+            {/* Панель инструментов */}
+            <div className="flex gap-2 overflow-x-auto pb-1">
+               <button onClick={handleSaveToHistory} className="flex-1 bg-white border border-slate-200 text-slate-700 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-50 shadow-sm active:scale-95 transition-transform">
+                  <Save size={16} className="text-blue-600" />
+                  Сохранить КП
+               </button>
+               <button onClick={handleClear} className="bg-white border border-slate-200 text-slate-400 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:text-red-500 hover:border-red-100 shadow-sm active:scale-95 transition-transform">
+                  <RotateCcw size={16} />
+               </button>
+            </div>
+
             {/* Клиент */}
             <div className="card">
                <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider">
                  <User size={14} /> Клиент
                </div>
-               <input 
-                 type="text" 
-                 value={clientName} 
-                 onChange={(e) => setClientName(e.target.value)} 
-                 placeholder="Имя или название компании" 
-                 className="w-full text-base font-medium text-slate-800 placeholder-slate-300 border-none focus:ring-0 p-0 outline-none" 
-               />
+               <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя или название компании" className="w-full text-base font-medium text-slate-800 placeholder-slate-300 border-none focus:ring-0 p-0 outline-none" />
             </div>
 
             {/* Товары */}
@@ -336,19 +389,13 @@ export default function App() {
                   <Package size={14} /> Товары ({items.length})
                 </span>
               </div>
-              
               <div className="space-y-2">
                 {items.map((item, index) => (
                   <ProductRow key={index} item={item} index={index} onUpdate={updateItem} onRemove={removeItem} />
                 ))}
               </div>
-
-              <button 
-                onClick={() => setShowSearchModal(true)} 
-                className="btn btn-secondary w-full mt-3 py-3 bg-white border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 active:scale-95"
-              >
-                <Search size={16} />
-                Добавить товар
+              <button onClick={() => setShowSearchModal(true)} className="btn btn-secondary w-full mt-3 py-3 bg-white border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 active:scale-95">
+                <Search size={16} /> Добавить товар
               </button>
             </div>
 
@@ -362,12 +409,7 @@ export default function App() {
                 <div className="flex justify-between items-center text-sm text-slate-500">
                   <span className="flex items-center gap-1"><Percent size={14}/> Общая скидка</span>
                   <div className="flex items-center bg-orange-50 rounded px-2">
-                    <input 
-                      type="number" 
-                      value={globalDiscount} 
-                      onChange={(e) => setGlobalDiscount(parseFloat(e.target.value)||0)} 
-                      className="w-8 bg-transparent text-right py-0.5 text-orange-600 font-bold focus:ring-0 border-none p-0 text-sm outline-none" 
-                    />
+                    <input type="number" value={globalDiscount} onChange={(e) => setGlobalDiscount(parseFloat(e.target.value)||0)} className="w-8 bg-transparent text-right py-0.5 text-orange-600 font-bold focus:ring-0 border-none p-0 text-sm outline-none" />
                     <span className="text-orange-400">%</span>
                   </div>
                 </div>
@@ -389,13 +431,11 @@ export default function App() {
                  </div>
                  <h2 className="text-3xl font-bold">{total.toLocaleString()} ₽</h2>
               </div>
-              
               <div className="p-5">
                 <div className="flex justify-between mb-6 pb-4 border-b border-slate-100">
                   <div><div className="text-[10px] text-slate-400 uppercase tracking-wide">Для кого</div><div className="font-semibold text-slate-800">{clientName || 'Клиент'}</div></div>
                   <div className="text-right"><div className="text-[10px] text-slate-400 uppercase tracking-wide">От кого</div><div className="font-semibold text-slate-800">{managerName.split(' ')[0]}</div></div>
                 </div>
-
                 <div className="space-y-4">
                   {items.map((item, i) => {
                     const itemPrice = item.price * (1 - (item.discount || 0) / 100);
@@ -416,7 +456,6 @@ export default function App() {
                     );
                   })}
                 </div>
-
                 {globalDiscount > 0 && (
                    <div className="mt-6 flex justify-between text-sm text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">
                       <span>Скидка на чек</span>
@@ -425,7 +464,6 @@ export default function App() {
                 )}
               </div>
             </div>
-            
             <button onClick={copyToClipboard} className={`btn btn-primary w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-blue-600 text-white active:scale-95'}`}>
               {copied ? <Check size={20} /> : <Copy size={20} />}
               {copied ? 'Скопировано!' : 'Скопировать текст'}
@@ -442,27 +480,52 @@ export default function App() {
                 <h3 className="font-bold text-slate-800">Добавить товар</h3>
                 <button onClick={() => setShowSearchModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500"><X size={20} /></button>
              </div>
-             
              <div className="relative mb-3">
                 <Search size={18} className="absolute left-3 top-3.5 text-slate-400" />
-                <input 
-                  autoFocus 
-                  type="text" 
-                  placeholder="Введите артикул (напр. 32843000)" 
-                  value={searchQuery} 
-                  onChange={(e) => setSearchQuery(e.target.value)} 
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()} 
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" 
-                />
+                <input autoFocus type="text" placeholder="Введите артикул" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
+             </div>
+             <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="btn btn-primary w-full py-3 bg-blue-600 text-white rounded-xl font-bold mb-3 disabled:opacity-50">{isSearching ? 'Поиск...' : 'Найти'}</button>
+             <button onClick={handleManualAdd} className="w-full py-3 text-slate-500 font-medium text-sm">Ввести вручную</button>
+          </div>
+        </div>
+      )}
+
+      {/* HISTORY MODAL */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white w-full max-w-md sm:rounded-t-2xl h-[80vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-10">
+             <div className="flex justify-between items-center p-5 border-b border-slate-100">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <FolderOpen size={20} className="text-blue-600"/> История ({savedCPs.length})
+                </h3>
+                <button onClick={() => setShowHistoryModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500"><X size={20} /></button>
              </div>
              
-             <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="btn btn-primary w-full py-3 bg-blue-600 text-white rounded-xl font-bold mb-3 disabled:opacity-50">
-               {isSearching ? 'Поиск...' : 'Найти'}
-             </button>
-             
-             <button onClick={handleManualAdd} className="w-full py-3 text-slate-500 font-medium text-sm">
-                Ввести вручную
-             </button>
+             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
+               {savedCPs.length === 0 ? (
+                 <div className="text-center text-slate-400 mt-10">
+                   <FolderOpen size={48} className="mx-auto mb-3 opacity-20"/>
+                   <p>Здесь пока пусто</p>
+                 </div>
+               ) : (
+                 savedCPs.map((cp) => (
+                   <div key={cp.id} onClick={() => handleLoadCP(cp)} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 active:scale-[0.98] transition-transform cursor-pointer">
+                     <div className="flex justify-between items-start mb-2">
+                       <h4 className="font-bold text-slate-800">{cp.clientName}</h4>
+                       <span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-full">{cp.total.toLocaleString()} ₽</span>
+                     </div>
+                     <div className="flex justify-between items-end">
+                       <div className="text-xs text-slate-400 flex items-center gap-1">
+                          <Clock size={12}/> {cp.date} в {cp.time} • {cp.items.length} поз.
+                       </div>
+                       <button onClick={(e) => handleDeleteCP(e, cp.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                         <Trash2 size={16} />
+                       </button>
+                     </div>
+                   </div>
+                 ))
+               )}
+             </div>
           </div>
         </div>
       )}
