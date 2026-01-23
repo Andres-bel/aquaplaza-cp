@@ -8,16 +8,13 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "5.3"; 
+const APP_VERSION = "5.4"; 
 const API_URL = ''; 
 
-// --- ЗАПАСНЫЕ СТИЛИ ---
+// --- ЗАПАСНЫЕ СТИЛИ (Минималистичные, чтобы не ломать Tailwind) ---
 const FALLBACK_STYLES = `
   body { font-family: -apple-system, sans-serif; background: #f0f2f5; color: #333; margin: 0; padding-bottom: 80px; }
-  .btn { padding: 12px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px; }
-  .btn-primary { background: #007aff; color: white; }
-  .card { background: white; padding: 16px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 12px; }
-  .input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+  .card-fallback { background: white; padding: 16px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 12px; }
 `;
 
 // --- ЗАГРУЗЧИК СКРИПТОВ ---
@@ -29,6 +26,7 @@ const useExternalScripts = () => {
     fallback.innerHTML = FALLBACK_STYLES;
     document.head.appendChild(fallback);
 
+    // Грузим Tailwind
     if (!document.getElementById('tailwind-script')) {
       const script = document.createElement('script');
       script.id = 'tailwind-script';
@@ -36,6 +34,7 @@ const useExternalScripts = () => {
       document.head.appendChild(script);
     }
 
+    // Грузим html2canvas
     if (!document.getElementById('html2canvas-script')) {
       const script = document.createElement('script');
       script.id = 'html2canvas-script';
@@ -56,7 +55,7 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
   const totalItemSum = finalPrice * item.qty;
 
   return (
-    <div className="card group relative animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-gray-100 mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="flex justify-between items-start gap-3 mb-2">
         <div className="flex-1 min-w-0">
            {item.sku && (
@@ -171,7 +170,6 @@ export default function App() {
     });
     text += `------------------\n`;
     if (globalDiscount > 0) text += `Доп. скидка на чек: ${globalDiscount}%\n`;
-    // Расчет итого
     const sub = items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0);
     const tot = sub * (1 - globalDiscount/100);
     
@@ -183,14 +181,10 @@ export default function App() {
   // --- ОТПРАВКА В ТЕЛЕГРАМ ---
   const handleShareTelegram = () => {
     const text = generateCPText();
-    // Используем специальную ссылку Telegram для шаринга текста
     const url = `https://t.me/share/url?text=${encodeURIComponent(text)}`;
-    
-    // Пытаемся открыть через Telegram SDK, если доступно
     if (window.Telegram?.WebApp?.openTelegramLink) {
         window.Telegram.WebApp.openTelegramLink(url);
     } else {
-        // Иначе открываем как обычную ссылку (сработает редирект на приложение)
         window.open(url, '_blank');
     }
   };
@@ -362,7 +356,7 @@ export default function App() {
                </button>
             </div>
             
-            <div className="card space-y-3">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-3">
                <div>
                  <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider"><User size={14} /> Клиент</div>
                  <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя или название компании" className="w-full text-base font-medium text-slate-800 placeholder-slate-300 border-none focus:ring-0 p-0 outline-none" />
@@ -376,9 +370,9 @@ export default function App() {
             <div>
               <div className="flex justify-between items-center mb-2 px-1"><span className="text-slate-400 text-xs uppercase font-bold tracking-wider flex items-center gap-2"><Package size={14} /> Товары ({items.length})</span></div>
               <div className="space-y-2">{items.map((item, index) => (<ProductRow key={index} item={item} index={index} onUpdate={updateItem} onRemove={removeItem} />))}</div>
-              <button onClick={() => setShowSearchModal(true)} className="btn btn-secondary w-full mt-3 py-3 bg-white border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 active:scale-95"><Search size={16} /> Добавить товар</button>
+              <button onClick={() => setShowSearchModal(true)} className="w-full mt-3 py-3 bg-white border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 active:scale-95"><Search size={16} /> Добавить товар</button>
             </div>
-            <div className="card mt-4">
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mt-4">
               <div className="space-y-2 mb-4">
                 <div className="flex justify-between text-sm text-slate-500"><span>Подытог</span><span>{subtotal.toLocaleString()} ₽</span></div>
                 <div className="flex justify-between items-center text-sm text-slate-500">
@@ -443,13 +437,13 @@ export default function App() {
             <div className="space-y-3">
               <button 
                 onClick={handleShareTelegram} 
-                className="btn w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 bg-blue-600 text-white flex items-center justify-center gap-2 active:scale-95 transition-all"
+                className="w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 bg-blue-600 text-white flex items-center justify-center gap-2 active:scale-95 transition-all"
               >
                 <Send size={18} /> Отправить в Telegram
               </button>
 
               <div className="grid grid-cols-2 gap-3">
-                <button onClick={copyToClipboard} className={`btn w-full py-3.5 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-white text-slate-700 border border-slate-200 active:scale-95'}`}>
+                <button onClick={copyToClipboard} className={`w-full py-3.5 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-white text-slate-700 border border-slate-200 active:scale-95'}`}>
                   {copied ? <Check size={18} /> : <Copy size={18} />}
                   {copied ? 'Скопировано!' : 'Текст'}
                 </button>
@@ -457,7 +451,7 @@ export default function App() {
                 <button 
                   onClick={handleSaveImage} 
                   disabled={isGeneratingImage}
-                  className="btn w-full py-3.5 rounded-xl font-bold shadow-sm bg-white text-slate-700 border border-slate-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70 disabled:scale-100"
+                  className="w-full py-3.5 rounded-xl font-bold shadow-sm bg-white text-slate-700 border border-slate-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70 disabled:scale-100"
                 >
                   {isGeneratingImage ? <Loader2 size={18} className="animate-spin"/> : <ImageIcon size={18} />}
                   {isGeneratingImage ? 'Создаю...' : 'Как фото'}
@@ -480,7 +474,7 @@ export default function App() {
                 <Search size={18} className="absolute left-3 top-3.5 text-slate-400" />
                 <input autoFocus type="text" placeholder="Введите артикул" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
              </div>
-             <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="btn btn-primary w-full py-3 bg-blue-600 text-white rounded-xl font-bold mb-3 disabled:opacity-50">{isSearching ? 'Поиск...' : 'Найти'}</button>
+             <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold mb-3 disabled:opacity-50">{isSearching ? 'Поиск...' : 'Найти'}</button>
              <button onClick={handleManualAdd} className="w-full py-3 text-slate-500 font-medium text-sm">Ввести вручную</button>
           </div>
         </div>
@@ -507,7 +501,7 @@ export default function App() {
 
       {activeTab === 'editor' && (
         <div className="fixed bottom-6 left-0 right-0 px-5 max-w-md mx-auto z-10 pointer-events-none">
-          <button onClick={() => setActiveTab('preview')} className="btn btn-primary pointer-events-auto w-full bg-blue-600 text-white py-3.5 rounded-xl shadow-lg shadow-blue-500/30 font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
+          <button onClick={() => setActiveTab('preview')} className="pointer-events-auto w-full bg-blue-600 text-white py-3.5 rounded-xl shadow-lg shadow-blue-500/30 font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
             <FileText size={20} />
             К просмотру ({total.toLocaleString()} ₽)
           </button>
