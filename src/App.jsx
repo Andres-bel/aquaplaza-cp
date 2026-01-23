@@ -4,11 +4,11 @@ import {
   User, Briefcase, Search, ArrowRight, Package, X,
   Sparkles, Percent, Wifi, RefreshCw, Loader2,
   Save, FolderOpen, RotateCcw, Clock, Download, Share, 
-  Image as ImageIcon, Send, Share2
+  Image as ImageIcon, Send, Share2, Camera
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "6.8"; 
+const APP_VERSION = "6.10"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
@@ -345,8 +345,6 @@ export default function App() {
               </div>
             </div>
           </div>
-        ) : (
-          <div></div> 
         )}
       </div>
 
