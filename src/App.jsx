@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "5.8"; 
+const APP_VERSION = "5.9"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
@@ -16,9 +16,14 @@ const INTERNAL_STYLES = `
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding-bottom: 80px; -webkit-font-smoothing: antialiased; }
   .app-card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); margin-bottom: 12px; border: 1px solid #f3f4f6; }
   .app-card-sm { padding: 12px; }
-  .app-input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #f9fafb; font-size: 14px; outline: none; transition: border-color 0.2s; }
+  
+  /* Поля ввода - принудительно черный цвет */
+  .app-input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #f9fafb; font-size: 14px; outline: none; transition: border-color 0.2s; color: #000000 !important; -webkit-text-fill-color: #000000 !important; }
   .app-input:focus { border-color: #3b82f6; background: white; }
-  .app-input-ghost { background: transparent; border: none; padding: 0; margin: 0; width: 100%; outline: none; }
+  .app-input::placeholder { color: #9ca3af; -webkit-text-fill-color: #9ca3af; }
+  
+  .app-input-ghost { background: transparent; border: none; padding: 0; margin: 0; width: 100%; outline: none; color: #000000 !important; }
+  
   .app-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; border: none; transition: all 0.2s; active: scale(0.98); }
   .app-btn:active { transform: scale(0.98); }
   .app-btn-primary { background-color: #2563eb; color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
@@ -80,7 +85,7 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
              value={item.name}
              onChange={(e) => onUpdate(index, 'name', e.target.value)}
              className="app-input-ghost text-sm text-bold"
-             style={{ color: '#1f2937', resize: 'none', minHeight: '24px' }}
+             style={{ color: '#000000', resize: 'none', minHeight: '24px' }}
            />
         </div>
         <button onClick={() => onRemove(index)} className="app-btn-icon">
