@@ -8,41 +8,27 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "5.5"; 
+const APP_VERSION = "5.6"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
-// Это гарантирует, что дизайн будет работать всегда, даже без внешних библиотек
 const INTERNAL_STYLES = `
-  /* Основа */
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding-bottom: 80px; -webkit-font-smoothing: antialiased; }
-  
-  /* Карточки */
   .app-card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); margin-bottom: 12px; border: 1px solid #f3f4f6; }
   .app-card-sm { padding: 12px; }
-  
-  /* Поля ввода */
   .app-input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #f9fafb; font-size: 14px; outline: none; transition: border-color 0.2s; }
   .app-input:focus { border-color: #3b82f6; background: white; }
   .app-input-ghost { background: transparent; border: none; padding: 0; margin: 0; width: 100%; outline: none; }
-  
-  /* Кнопки */
   .app-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; border: none; transition: all 0.2s; active: scale(0.98); }
   .app-btn:active { transform: scale(0.98); }
-  
   .app-btn-primary { background-color: #2563eb; color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
   .app-btn-primary:hover { background-color: #1d4ed8; }
-  
   .app-btn-secondary { background-color: white; color: #374151; border: 1px solid #e5e7eb; }
   .app-btn-secondary:hover { background-color: #f9fafb; border-color: #d1d5db; }
-  
   .app-btn-dashed { background-color: white; color: #2563eb; border: 1px dashed #93c5fd; }
   .app-btn-dashed:hover { background-color: #eff6ff; }
-
   .app-btn-icon { padding: 8px; border-radius: 8px; color: #9ca3af; background: transparent; border: none; cursor: pointer; }
   .app-btn-icon:hover { color: #ef4444; background: #fef2f2; }
-
-  /* Утилиты */
   .flex-between { display: flex; justify-content: space-between; align-items: center; }
   .text-sm { font-size: 14px; }
   .text-xs { font-size: 12px; }
@@ -55,14 +41,11 @@ const INTERNAL_STYLES = `
 // --- ЗАГРУЗЧИК СКРИПТОВ ---
 const useExternalScripts = () => {
   const [loaded, setLoaded] = useState(false);
-  
   useEffect(() => {
-    // 1. Вставляем наши гарантированные стили
     const styleTag = document.createElement('style');
     styleTag.innerHTML = INTERNAL_STYLES;
     document.head.appendChild(styleTag);
 
-    // 2. Грузим html2canvas для скриншотов
     if (!document.getElementById('html2canvas-script')) {
       const script = document.createElement('script');
       script.id = 'html2canvas-script';
@@ -72,9 +55,7 @@ const useExternalScripts = () => {
     } else {
       setLoaded(true);
     }
-    // Tailwind грузить не будем, так как INTERNAL_STYLES надежнее в Telegram WebApp
   }, []);
-  
   return loaded;
 };
 
@@ -157,7 +138,6 @@ export default function App() {
   const [savedCPs, setSavedCPs] = useState([]);
   const receiptRef = useRef(null);
 
-  // --- ИНИЦИАЛИЗАЦИЯ ---
   useEffect(() => {
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
@@ -189,7 +169,6 @@ export default function App() {
     localStorage.setItem('aquaplaza_draft', JSON.stringify(draft));
   }, [items, clientName, globalDiscount, managerName]);
 
-  // --- ЛОГИКА ---
   const generateCPText = () => {
     const date = new Date().toLocaleDateString('ru-RU');
     let text = `🌊 *Aquaplaza* | КП от ${date}\n`;
@@ -211,11 +190,25 @@ export default function App() {
     return text;
   };
 
-  const handleShareTelegram = () => {
+  const handleShareTelegram = async () => {
     const text = generateCPText();
+    
+    // 1. Пробуем системную шторку "Поделиться" (самый мягкий вариант)
+    if (navigator.share && navigator.canShare && navigator.canShare({ text })) {
+      try {
+        await navigator.share({
+          title: 'КП Aquaplaza',
+          text: text
+        });
+        return; // Если получилось, не продолжаем
+      } catch (e) {
+        console.log('Native share failed/cancelled, trying fallback');
+      }
+    }
+
+    // 2. Фолбэк: Обычная ссылка (window.open реже закрывает TWA чем openTelegramLink)
     const url = `https://t.me/share/url?text=${encodeURIComponent(text)}`;
-    if (window.Telegram?.WebApp?.openTelegramLink) window.Telegram.WebApp.openTelegramLink(url);
-    else window.open(url, '_blank');
+    window.open(url, '_blank');
   };
 
   const handleSaveImage = async () => {
