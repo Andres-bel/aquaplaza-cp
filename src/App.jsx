@@ -2,24 +2,53 @@ import React, { useState, useEffect } from 'react';
 import { 
   Plus, Trash2, FileText, Copy, Check, Calculator, 
   User, Briefcase, Search, ArrowRight, Package, X,
-  Sparkles, Percent, Wifi, RefreshCw
+  Sparkles, Percent, Wifi, RefreshCw, Loader2
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "4.2"; 
+const APP_VERSION = "4.3"; 
 const API_URL = ''; 
 
-// --- АВТО-ПОДКЛЮЧЕНИЕ СТИЛЕЙ (Tailwind CDN) ---
-// Это исправит "ужасный вид", если стили не были настроены
-const useTailwindLoader = () => {
+// --- ЗАПАСНЫЕ СТИЛИ (Если Tailwind не загрузится) ---
+const FALLBACK_STYLES = `
+  body { font-family: -apple-system, sans-serif; background: #f0f2f5; color: #333; margin: 0; padding-bottom: 80px; }
+  .btn { padding: 12px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px; }
+  .btn-primary { background: #007aff; color: white; }
+  .card { background: white; padding: 16px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 12px; }
+  .input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+`;
+
+// --- ЗАГРУЗЧИК СТИЛЕЙ ---
+const useStyleLoader = () => {
+  const [loaded, setLoaded] = useState(false);
+
   useEffect(() => {
-    if (!document.getElementById('tailwind-script')) {
-      const script = document.createElement('script');
-      script.id = 'tailwind-script';
-      script.src = "https://cdn.tailwindcss.com";
-      document.head.appendChild(script);
+    // 1. Добавляем запасные стили сразу
+    const fallback = document.createElement('style');
+    fallback.innerHTML = FALLBACK_STYLES;
+    document.head.appendChild(fallback);
+
+    // 2. Пытаемся загрузить красивые стили (Tailwind)
+    if (document.getElementById('tailwind-script')) {
+      setLoaded(true);
+      return;
     }
+
+    const script = document.createElement('script');
+    script.id = 'tailwind-script';
+    script.src = "https://cdn.tailwindcss.com";
+    script.onload = () => {
+      console.log("Tailwind loaded!");
+      setLoaded(true);
+    };
+    script.onerror = () => {
+      console.error("Tailwind failed to load");
+      setLoaded(true); // Все равно показываем приложение, но с запасными стилями
+    };
+    document.head.appendChild(script);
   }, []);
+
+  return loaded;
 };
 
 // --- КОМПОНЕНТЫ ---
@@ -29,7 +58,7 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
   const totalItemSum = finalPrice * item.qty;
 
   return (
-    <div className="group bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-gray-100 mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="card group relative animate-in fade-in slide-in-from-bottom-2 duration-300">
       {/* Верхняя строка: Название */}
       <div className="flex justify-between items-start gap-3 mb-2">
         <div className="flex-1 min-w-0">
@@ -44,7 +73,8 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
              placeholder="Название товара..."
              value={item.name}
              onChange={(e) => onUpdate(index, 'name', e.target.value)}
-             className="w-full text-sm font-medium text-gray-800 placeholder-gray-300 bg-transparent border-none focus:ring-0 p-0 resize-none leading-tight"
+             className="w-full text-sm font-medium text-gray-800 placeholder-gray-300 bg-transparent border-none focus:ring-0 p-0 resize-none leading-tight outline-none"
+             style={{ minHeight: '24px' }}
            />
         </div>
         <button 
@@ -64,7 +94,7 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
             value={item.price === 0 ? '' : item.price}
             onChange={(e) => onUpdate(index, 'price', parseFloat(e.target.value) || 0)}
             placeholder="0"
-            className="w-full bg-transparent font-semibold text-gray-700 border-none focus:ring-0 p-0"
+            className="w-full bg-transparent font-semibold text-gray-700 border-none focus:ring-0 p-0 outline-none"
           />
         </div>
         
@@ -77,7 +107,7 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
             placeholder="-"
             value={item.discount || ''}
             onChange={(e) => onUpdate(index, 'discount', parseFloat(e.target.value) || 0)}
-            className="w-full bg-transparent text-center font-semibold text-orange-500 border-none focus:ring-0 p-0 placeholder-gray-300"
+            className="w-full bg-transparent text-center font-semibold text-orange-500 border-none focus:ring-0 p-0 placeholder-gray-300 outline-none"
           />
         </div>
         
@@ -89,7 +119,7 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
             type="number"
             value={item.qty}
             onChange={(e) => onUpdate(index, 'qty', parseInt(e.target.value) || 1)}
-            className="w-full bg-transparent text-center font-semibold text-gray-700 border-none focus:ring-0 p-0"
+            className="w-full bg-transparent text-center font-semibold text-gray-700 border-none focus:ring-0 p-0 outline-none"
           />
         </div>
         
@@ -103,7 +133,7 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
 };
 
 export default function App() {
-  useTailwindLoader(); // <--- МАГИЯ ЗДЕСЬ (Загружает стили)
+  const stylesLoaded = useStyleLoader(); // Загружаем стили
 
   const [activeTab, setActiveTab] = useState('editor');
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -248,6 +278,16 @@ export default function App() {
 
   const handleReload = () => window.location.reload();
 
+  // Если стили еще не загрузились - показываем экран загрузки
+  if (!stylesLoaded) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif' }}>
+        <Loader2 className="animate-spin text-blue-600 mb-2" size={32} />
+        <div style={{ color: '#666' }}>Загрузка оформления...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-24 selection:bg-blue-100">
       {/* HEADER */}
@@ -276,7 +316,7 @@ export default function App() {
         {activeTab === 'editor' ? (
           <div className="space-y-4">
             {/* Клиент */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+            <div className="card">
                <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider">
                  <User size={14} /> Клиент
                </div>
@@ -285,7 +325,7 @@ export default function App() {
                  value={clientName} 
                  onChange={(e) => setClientName(e.target.value)} 
                  placeholder="Имя или название компании" 
-                 className="w-full text-base font-medium text-slate-800 placeholder-slate-300 border-none focus:ring-0 p-0" 
+                 className="w-full text-base font-medium text-slate-800 placeholder-slate-300 border-none focus:ring-0 p-0 outline-none" 
                />
             </div>
 
@@ -305,7 +345,7 @@ export default function App() {
 
               <button 
                 onClick={() => setShowSearchModal(true)} 
-                className="w-full mt-3 py-3 bg-white border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 active:scale-95"
+                className="btn btn-secondary w-full mt-3 py-3 bg-white border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 active:scale-95"
               >
                 <Search size={16} />
                 Добавить товар
@@ -313,7 +353,7 @@ export default function App() {
             </div>
 
             {/* Итого */}
-            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mt-4">
+            <div className="card mt-4">
               <div className="space-y-2 mb-4">
                 <div className="flex justify-between text-sm text-slate-500">
                   <span>Подытог</span>
@@ -326,7 +366,7 @@ export default function App() {
                       type="number" 
                       value={globalDiscount} 
                       onChange={(e) => setGlobalDiscount(parseFloat(e.target.value)||0)} 
-                      className="w-8 bg-transparent text-right py-0.5 text-orange-600 font-bold focus:ring-0 border-none p-0 text-sm" 
+                      className="w-8 bg-transparent text-right py-0.5 text-orange-600 font-bold focus:ring-0 border-none p-0 text-sm outline-none" 
                     />
                     <span className="text-orange-400">%</span>
                   </div>
@@ -386,7 +426,7 @@ export default function App() {
               </div>
             </div>
             
-            <button onClick={copyToClipboard} className={`w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-blue-600 text-white active:scale-95'}`}>
+            <button onClick={copyToClipboard} className={`btn btn-primary w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-blue-600 text-white active:scale-95'}`}>
               {copied ? <Check size={20} /> : <Copy size={20} />}
               {copied ? 'Скопировано!' : 'Скопировать текст'}
             </button>
@@ -416,7 +456,7 @@ export default function App() {
                 />
              </div>
              
-             <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold mb-3 disabled:opacity-50">
+             <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="btn btn-primary w-full py-3 bg-blue-600 text-white rounded-xl font-bold mb-3 disabled:opacity-50">
                {isSearching ? 'Поиск...' : 'Найти'}
              </button>
              
@@ -430,7 +470,7 @@ export default function App() {
       {/* FAB */}
       {activeTab === 'editor' && (
         <div className="fixed bottom-6 left-0 right-0 px-5 max-w-md mx-auto z-10 pointer-events-none">
-          <button onClick={() => setActiveTab('preview')} className="pointer-events-auto w-full bg-blue-600 text-white py-3.5 rounded-xl shadow-lg shadow-blue-500/30 font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
+          <button onClick={() => setActiveTab('preview')} className="btn btn-primary pointer-events-auto w-full bg-blue-600 text-white py-3.5 rounded-xl shadow-lg shadow-blue-500/30 font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
             <FileText size={20} />
             К просмотру ({total.toLocaleString()} ₽)
           </button>
