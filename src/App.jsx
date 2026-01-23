@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "5.9"; 
+const APP_VERSION = "6.0"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
@@ -17,7 +17,6 @@ const INTERNAL_STYLES = `
   .app-card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); margin-bottom: 12px; border: 1px solid #f3f4f6; }
   .app-card-sm { padding: 12px; }
   
-  /* Поля ввода - принудительно черный цвет */
   .app-input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #f9fafb; font-size: 14px; outline: none; transition: border-color 0.2s; color: #000000 !important; -webkit-text-fill-color: #000000 !important; }
   .app-input:focus { border-color: #3b82f6; background: white; }
   .app-input::placeholder { color: #9ca3af; -webkit-text-fill-color: #9ca3af; }
@@ -199,7 +198,6 @@ export default function App() {
     return text;
   };
 
-  // --- ГЛАВНАЯ ФУНКЦИЯ ОТПРАВКИ ФОТО ---
   const handleShareImage = async () => {
     if (!receiptRef.current || !window.html2canvas) { alert("Подготовка..."); return; }
     
@@ -216,22 +214,14 @@ export default function App() {
         if (!blob) throw new Error("Empty blob");
         const file = new File([blob], `kp_aquaplaza_${Date.now()}.png`, { type: 'image/png' });
 
-        // План А: Пытаемся отправить через нативное меню
         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
           try {
-            await navigator.share({
-              files: [file],
-              title: 'КП Aquaplaza'
-            });
+            await navigator.share({ files: [file], title: 'КП Aquaplaza' });
             setIsGeneratingImage(false);
             return; 
-          } catch (e) {
-            console.log('Share cancelled/failed, using fallback');
-          }
+          } catch (e) {}
         } 
         
-        // План Б: Если не вышло (или мы на ПК), показываем картинку внутри приложения
-        // Это безопасно и не закроет приложение
         const dataUrl = canvas.toDataURL('image/png');
         setGeneratedImage(dataUrl);
         setShowImageModal(true);
@@ -243,6 +233,21 @@ export default function App() {
       console.error(error);
       alert("Ошибка при создании фото");
       setIsGeneratingImage(false);
+    }
+  };
+
+  const handleCopyImageFromModal = async () => {
+    if (!generatedImage) return;
+    try {
+      const response = await fetch(generatedImage);
+      const blob = await response.blob();
+      await navigator.clipboard.write([
+        new ClipboardItem({ [blob.type]: blob })
+      ]);
+      alert("Картинка скопирована!");
+    } catch (err) {
+      console.error(err);
+      alert("Не удалось скопировать автоматически. Пожалуйста, сохраните картинку через долгий тап.");
     }
   };
 
@@ -465,7 +470,7 @@ export default function App() {
                 disabled={isGeneratingImage}
               >
                 {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-                {isGeneratingImage ? 'Создаю фото...' : 'Отправить в Telegram'}
+                {isGeneratingImage ? 'Создаю фото...' : 'Отправить в Telegram (Фото)'}
               </button>
 
               <button 
@@ -516,16 +521,25 @@ export default function App() {
         </div>
       )}
 
-      {/* --- МОДАЛЬНОЕ ОКНО С КАРТИНКОЙ (БЕЗОПАСНЫЙ РЕЖИМ) --- */}
+      {/* --- МОДАЛЬНОЕ ОКНО С КАРТИНКОЙ --- */}
       {showImageModal && generatedImage && (
         <div style={{ position:'fixed', inset:0, zIndex:60, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.8)', backdropFilter:'blur(5px)' }} onClick={() => setShowImageModal(false)}>
           <div style={{ width:'90%', maxWidth:'400px', background:'white', borderRadius:'16px', padding:'20px', textAlign:'center' }} onClick={e => e.stopPropagation()}>
              <h3 className="text-bold" style={{ marginBottom:'12px', fontSize:'18px' }}>Готово!</h3>
-             <p className="text-sm text-gray" style={{ marginBottom:'16px' }}>
-                Зажмите картинку ниже, чтобы <b>«Скопировать»</b> или <b>«Сохранить»</b>, а затем отправьте в Telegram.
-             </p>
              <img src={generatedImage} alt="КП" style={{ width:'100%', borderRadius:'8px', border:'1px solid #e5e7eb', marginBottom:'16px' }} />
-             <button onClick={() => setShowImageModal(false)} className="app-btn app-btn-secondary">Закрыть</button>
+             
+             <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={handleCopyImageFromModal} className="app-btn app-btn-primary" style={{flex: 1}}>
+                   <Copy size={18}/> Скопировать
+                </button>
+                <button onClick={() => setShowImageModal(false)} className="app-btn app-btn-secondary" style={{width: 'auto'}}>
+                   <X size={18}/>
+                </button>
+             </div>
+             
+             <p className="text-xs text-gray" style={{ marginTop:'12px' }}>
+                Если кнопка не сработала, зажмите картинку пальцем.
+             </p>
           </div>
         </div>
       )}
