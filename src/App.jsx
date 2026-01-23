@@ -6,34 +6,41 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "4.1"; // Измените это число, чтобы проверить обновление
+const APP_VERSION = "4.2"; 
 const API_URL = ''; 
 
-// --- КОМПОНЕНТЫ ---
+// --- АВТО-ПОДКЛЮЧЕНИЕ СТИЛЕЙ (Tailwind CDN) ---
+// Это исправит "ужасный вид", если стили не были настроены
+const useTailwindLoader = () => {
+  useEffect(() => {
+    if (!document.getElementById('tailwind-script')) {
+      const script = document.createElement('script');
+      script.id = 'tailwind-script';
+      script.src = "https://cdn.tailwindcss.com";
+      document.head.appendChild(script);
+    }
+  }, []);
+};
 
-const LoadingSpinner = () => (
-  <div className="flex items-center gap-2 text-blue-600 font-medium animate-pulse">
-    <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
-    <span>Поиск на сайте...</span>
-  </div>
-);
+// --- КОМПОНЕНТЫ ---
 
 const ProductRow = ({ item, onUpdate, onRemove, index }) => {
   const finalPrice = item.price * (1 - (item.discount || 0) / 100);
   const totalItemSum = finalPrice * item.qty;
 
   return (
-    <div className="group bg-white p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-gray-100 mb-3 transition-all hover:shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="flex justify-between items-start gap-3 mb-3">
-        <div className="flex-1">
+    <div className="group bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-gray-100 mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      {/* Верхняя строка: Название */}
+      <div className="flex justify-between items-start gap-3 mb-2">
+        <div className="flex-1 min-w-0">
            {item.sku && (
-             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide mb-1 inline-flex items-center gap-1 ${item.isAiGenerated ? 'bg-orange-50 text-orange-500' : 'bg-blue-50 text-blue-500'}`}>
+             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide mb-1 inline-flex items-center gap-1 ${item.isAiGenerated ? 'bg-orange-50 text-orange-500' : 'bg-slate-100 text-slate-500'}`}>
                #{item.sku}
-               {item.isAiGenerated ? <Sparkles size={8} /> : <Wifi size={8} />}
+               {item.isAiGenerated && <Sparkles size={8} />}
              </span>
            )}
            <textarea
-             rows={2}
+             rows={item.name.length > 30 ? 2 : 1}
              placeholder="Название товара..."
              value={item.name}
              onChange={(e) => onUpdate(index, 'name', e.target.value)}
@@ -42,47 +49,53 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
         </div>
         <button 
           onClick={() => onRemove(index)}
-          className="text-gray-300 hover:text-red-500 p-1 -mr-1 transition-colors opacity-0 group-hover:opacity-100 mobile-visible"
+          className="text-gray-300 hover:text-red-500 p-1.5 -mr-1 transition-colors"
         >
           <Trash2 size={16} />
         </button>
       </div>
       
-      <div className="flex items-center gap-2 bg-gray-50/50 p-2 rounded-xl">
+      {/* Нижняя строка: Цифры */}
+      <div className="flex items-center gap-2 bg-gray-50/80 p-2 rounded-lg text-xs sm:text-sm">
         <div className="flex-1 relative min-w-[60px]">
-          <label className="text-[9px] text-gray-400 absolute -top-1.5 left-1 bg-white px-1">Цена</label>
+          <span className="text-[9px] text-gray-400 block mb-0.5">Цена</span>
           <input
             type="number"
             value={item.price === 0 ? '' : item.price}
             onChange={(e) => onUpdate(index, 'price', parseFloat(e.target.value) || 0)}
             placeholder="0"
-            className="w-full bg-transparent text-sm font-semibold text-gray-700 border-none focus:ring-0 p-0 pl-1"
+            className="w-full bg-transparent font-semibold text-gray-700 border-none focus:ring-0 p-0"
           />
         </div>
-        <div className="w-px h-5 bg-gray-200"></div>
-        <div className="w-12 relative text-center">
-          <label className="text-[9px] text-gray-400 absolute -top-1.5 left-1/2 -translate-x-1/2 bg-white px-1">Скидка%</label>
+        
+        <div className="w-px h-6 bg-gray-200"></div>
+        
+        <div className="w-12 text-center">
+          <span className="text-[9px] text-gray-400 block mb-0.5">Скидка%</span>
           <input
             type="number"
-            placeholder="0"
+            placeholder="-"
             value={item.discount || ''}
             onChange={(e) => onUpdate(index, 'discount', parseFloat(e.target.value) || 0)}
-            className="w-full bg-transparent text-center text-sm font-semibold text-orange-500 border-none focus:ring-0 p-0"
+            className="w-full bg-transparent text-center font-semibold text-orange-500 border-none focus:ring-0 p-0 placeholder-gray-300"
           />
         </div>
-        <div className="w-px h-5 bg-gray-200"></div>
-        <div className="w-12 relative text-center">
-          <label className="text-[9px] text-gray-400 absolute -top-1.5 left-1/2 -translate-x-1/2 bg-white px-1">Шт</label>
+        
+        <div className="w-px h-6 bg-gray-200"></div>
+        
+        <div className="w-10 text-center">
+          <span className="text-[9px] text-gray-400 block mb-0.5">Шт</span>
           <input
             type="number"
             value={item.qty}
             onChange={(e) => onUpdate(index, 'qty', parseInt(e.target.value) || 1)}
-            className="w-full bg-transparent text-center text-sm font-semibold text-gray-700 border-none focus:ring-0 p-0"
+            className="w-full bg-transparent text-center font-semibold text-gray-700 border-none focus:ring-0 p-0"
           />
         </div>
-        <div className="min-w-[70px] text-right pr-1 ml-auto">
-           <div className="text-[9px] text-gray-400 mb-0.5">Сумма</div>
-           <div className="text-sm font-bold text-blue-600">{totalItemSum.toLocaleString()} ₽</div>
+        
+        <div className="min-w-[70px] text-right pl-2 border-l border-transparent">
+           <span className="text-[9px] text-gray-400 block mb-0.5">Сумма</span>
+           <div className="font-bold text-blue-600 leading-none">{totalItemSum.toLocaleString()}</div>
         </div>
       </div>
     </div>
@@ -90,6 +103,8 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
 };
 
 export default function App() {
+  useTailwindLoader(); // <--- МАГИЯ ЗДЕСЬ (Загружает стили)
+
   const [activeTab, setActiveTab] = useState('editor');
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,7 +129,7 @@ export default function App() {
     }
   }, []);
 
-  // --- УМНЫЙ ПОИСК (API + Fallback to AI) ---
+  // --- УМНЫЙ ПОИСК ---
   const handleSearch = async () => {
     if (!searchQuery) return;
     setIsSearching(true);
@@ -122,7 +137,6 @@ export default function App() {
 
     try {
       let foundProduct = null;
-      
       if (API_URL) {
         try {
           const response = await fetch(`${API_URL}?sku=${cleanSku}`);
@@ -137,9 +151,7 @@ export default function App() {
               isAiGenerated: false 
             };
           }
-        } catch (err) {
-          console.log("API Error");
-        }
+        } catch (err) { console.log("API unavailable"); }
       }
 
       if (!foundProduct) {
@@ -234,29 +246,25 @@ export default function App() {
     }
   };
 
-  // Функция принудительного обновления (можно вызвать нажатием на версию)
-  const handleReload = () => {
-    window.location.reload();
-  };
+  const handleReload = () => window.location.reload();
 
   return (
-    <div className="min-h-screen bg-[#F4F6F9] text-gray-800 font-sans pb-24">
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-24 selection:bg-blue-100">
       {/* HEADER */}
-      <div className="bg-white px-5 pt-12 pb-4 shadow-[0_4px_20px_rgba(0,0,0,0.03)] sticky top-0 z-20">
+      <div className="bg-white/80 backdrop-blur-md px-5 pt-12 pb-4 shadow-sm sticky top-0 z-20 border-b border-slate-100">
         <div className="flex justify-between items-center max-w-md mx-auto">
           <div>
-            <h1 className="text-xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
-              КП Менеджер 
-              <button onClick={handleReload} className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full flex items-center gap-1 hover:bg-green-200">
+            <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              КП Менеджер
+              <button onClick={handleReload} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1 hover:bg-slate-200">
                  v{APP_VERSION} <RefreshCw size={8}/>
               </button>
             </h1>
-            <p className="text-xs text-gray-400 font-medium">Aquaplaza Online</p>
           </div>
-          <div className="flex bg-gray-100/80 p-1 rounded-xl">
+          <div className="flex bg-slate-100 p-1 rounded-lg">
             {['editor', 'preview'].map(tab => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 text-xs font-semibold rounded-[9px] transition-all duration-300 ${activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                {tab === 'editor' ? 'Ред.' : 'Вид'}
+              <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                {tab === 'editor' ? 'Редактор' : 'Просмотр'}
               </button>
             ))}
           </div>
@@ -264,123 +272,168 @@ export default function App() {
       </div>
 
       {/* CONTENT */}
-      <div className="max-w-md mx-auto p-5">
+      <div className="max-w-md mx-auto p-4 sm:p-5">
         {activeTab === 'editor' ? (
-          <div className="space-y-6">
-            <section className="bg-white p-4 rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
-               <div className="flex gap-3 items-center mb-4">
-                 <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center text-blue-500"><User size={16} strokeWidth={2.5} /></div>
-                 <span className="font-bold text-gray-700 text-sm">Данные клиента</span>
+          <div className="space-y-4">
+            {/* Клиент */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+               <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider">
+                 <User size={14} /> Клиент
                </div>
-               <div className="space-y-3">
-                 <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя клиента..." className="w-full bg-gray-50 border-transparent focus:border-blue-500 focus:bg-white focus:ring-0 rounded-xl px-4 py-3 text-sm font-medium transition-all" />
-               </div>
-            </section>
+               <input 
+                 type="text" 
+                 value={clientName} 
+                 onChange={(e) => setClientName(e.target.value)} 
+                 placeholder="Имя или название компании" 
+                 className="w-full text-base font-medium text-slate-800 placeholder-slate-300 border-none focus:ring-0 p-0" 
+               />
+            </div>
 
-            <section>
-              <div className="flex justify-between items-end mb-4 px-1">
-                <span className="font-bold text-gray-700 text-sm flex items-center gap-2"><Package size={16} className="text-gray-400" />Товары ({items.length})</span>
+            {/* Товары */}
+            <div>
+              <div className="flex justify-between items-center mb-2 px-1">
+                <span className="text-slate-400 text-xs uppercase font-bold tracking-wider flex items-center gap-2">
+                  <Package size={14} /> Товары ({items.length})
+                </span>
               </div>
-              <div className="space-y-3">
+              
+              <div className="space-y-2">
                 {items.map((item, index) => (
                   <ProductRow key={index} item={item} index={index} onUpdate={updateItem} onRemove={removeItem} />
                 ))}
               </div>
-              <button onClick={() => setShowSearchModal(true)} className="w-full mt-4 py-3 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all flex items-center justify-center gap-2 active:scale-95">
-                <Search size={18} />
-                Найти товар
-              </button>
-            </section>
 
-            <section className="bg-white p-5 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.06)] border border-gray-50 mt-8">
-              <div className="space-y-3 mb-5">
-                <div className="flex justify-between text-sm text-gray-500"><span>Сумма товаров</span><span>{subtotal.toLocaleString()} ₽</span></div>
-                <div className="flex justify-between items-center text-sm text-gray-500">
+              <button 
+                onClick={() => setShowSearchModal(true)} 
+                className="w-full mt-3 py-3 bg-white border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 active:scale-95"
+              >
+                <Search size={16} />
+                Добавить товар
+              </button>
+            </div>
+
+            {/* Итого */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mt-4">
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between text-sm text-slate-500">
+                  <span>Подытог</span>
+                  <span>{subtotal.toLocaleString()} ₽</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-slate-500">
                   <span className="flex items-center gap-1"><Percent size={14}/> Общая скидка</span>
-                  <div className="flex items-center bg-orange-50 rounded-lg px-2 border border-orange-100">
-                    <input type="number" value={globalDiscount} onChange={(e) => setGlobalDiscount(parseFloat(e.target.value)||0)} className="w-12 bg-transparent text-right py-1 text-orange-600 font-bold focus:ring-0 border-none p-0" />
-                    <span className="ml-1 text-orange-400">%</span>
+                  <div className="flex items-center bg-orange-50 rounded px-2">
+                    <input 
+                      type="number" 
+                      value={globalDiscount} 
+                      onChange={(e) => setGlobalDiscount(parseFloat(e.target.value)||0)} 
+                      className="w-8 bg-transparent text-right py-0.5 text-orange-600 font-bold focus:ring-0 border-none p-0 text-sm" 
+                    />
+                    <span className="text-orange-400">%</span>
                   </div>
                 </div>
               </div>
-              <div className="pt-4 border-t border-dashed border-gray-200">
-                <div className="flex justify-between items-baseline"><span className="text-gray-400 font-medium">К оплате</span><span className="text-2xl font-black text-gray-900 tracking-tight">{total.toLocaleString()} ₽</span></div>
+              <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline">
+                <span className="text-slate-400 font-medium text-sm">Итого к оплате</span>
+                <span className="text-xl font-bold text-slate-900">{total.toLocaleString()} ₽</span>
               </div>
-            </section>
+            </div>
           </div>
         ) : (
+          /* PREVIEW */
           <div className="animate-in fade-in zoom-in-95 duration-300 pb-10">
-            <div className="bg-white rounded-3xl overflow-hidden shadow-2xl shadow-blue-900/10 mb-6 relative border border-gray-100">
-              <div className="bg-[#007AFF] px-6 py-8 text-white relative overflow-hidden">
-                <div className="absolute top-0 right-0 opacity-10 transform translate-x-1/3 -translate-y-1/3"><Calculator size={200} /></div>
-                <div className="relative z-10">
-                   <div className="opacity-80 text-xs font-medium uppercase tracking-widest mb-2">Коммерческое предложение</div>
-                   <h2 className="text-3xl font-bold mb-1">{total.toLocaleString()} ₽</h2>
-                   <div className="text-blue-100 text-sm">{items.length} товаров • {new Date().toLocaleDateString()}</div>
-                </div>
+            <div className="bg-white rounded-xl overflow-hidden shadow-lg border border-slate-100 mb-6">
+              <div className="bg-blue-600 px-6 py-6 text-white">
+                 <div className="flex justify-between items-start mb-4">
+                   <div className="opacity-80 text-xs font-bold uppercase tracking-wider">Коммерческое предложение</div>
+                   <div className="text-blue-100 text-xs">{new Date().toLocaleDateString()}</div>
+                 </div>
+                 <h2 className="text-3xl font-bold">{total.toLocaleString()} ₽</h2>
               </div>
-              <div className="p-6 relative">
-                <div className="absolute top-0 left-0 right-0 h-4 -mt-2 bg-[url('https://raw.githubusercontent.com/adrianmcli/css-scalloped-shapes/master/dist/scallop.svg')] bg-contain bg-repeat-x opacity-10"></div>
-                <div className="flex justify-between mb-8 pb-4 border-b border-gray-100">
-                  <div><div className="text-[10px] text-gray-400 uppercase tracking-wide">Клиент</div><div className="font-semibold text-gray-800">{clientName || 'Частное лицо'}</div></div>
-                  <div className="text-right"><div className="text-[10px] text-gray-400 uppercase tracking-wide">Менеджер</div><div className="font-semibold text-gray-800">{managerName.split(' ')[0]}</div></div>
+              
+              <div className="p-5">
+                <div className="flex justify-between mb-6 pb-4 border-b border-slate-100">
+                  <div><div className="text-[10px] text-slate-400 uppercase tracking-wide">Для кого</div><div className="font-semibold text-slate-800">{clientName || 'Клиент'}</div></div>
+                  <div className="text-right"><div className="text-[10px] text-slate-400 uppercase tracking-wide">От кого</div><div className="font-semibold text-slate-800">{managerName.split(' ')[0]}</div></div>
                 </div>
-                <div className="space-y-4 mb-8">
+
+                <div className="space-y-4">
                   {items.map((item, i) => {
                     const itemPrice = item.price * (1 - (item.discount || 0) / 100);
                     return (
-                      <div key={i} className="flex justify-between items-start text-sm group">
+                      <div key={i} className="flex justify-between text-sm">
                         <div className="flex gap-3">
-                           <span className="text-gray-300 font-mono text-xs pt-0.5">{i+1}</span>
+                           <span className="text-slate-300 font-mono text-xs pt-0.5">{i+1}</span>
                            <div>
-                             <div className="font-medium text-gray-800 leading-snug mb-0.5">{item.name || 'Товар'}</div>
-                             <div className="flex gap-2 text-[10px]">
-                               {item.sku && <span className="text-gray-400">Арт: {item.sku}</span>}
-                               {item.discount > 0 && <span className="text-orange-500 font-bold">-{item.discount}%</span>}
-                             </div>
+                             <div className="font-medium text-slate-800 leading-snug">{item.name || 'Товар'}</div>
+                             {item.sku && <div className="text-[10px] text-slate-400 mt-0.5">Арт: {item.sku}</div>}
                            </div>
                         </div>
                         <div className="text-right pl-4 whitespace-nowrap">
-                           <div className="font-semibold text-gray-700">{(itemPrice * item.qty).toLocaleString()}</div>
-                           <div className="text-[10px] text-gray-400">{item.qty} x {itemPrice.toLocaleString()}</div>
+                           <div className="font-semibold text-slate-700">{itemPrice.toLocaleString()} ₽</div>
+                           <div className="text-[10px] text-slate-400">{item.qty} шт</div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-                {globalDiscount > 0 && <div className="flex justify-between text-sm text-orange-600 mb-2 px-3 py-2 bg-orange-50 rounded-lg border border-orange-100"><span className="font-medium">Доп. скидка</span><span className="font-bold">-{globalDiscount}%</span></div>}
+
+                {globalDiscount > 0 && (
+                   <div className="mt-6 flex justify-between text-sm text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">
+                      <span>Скидка на чек</span>
+                      <span className="font-bold">-{globalDiscount}%</span>
+                   </div>
+                )}
               </div>
-              <div className="bg-gray-50 px-6 py-4 text-center border-t border-gray-100"><p className="text-[10px] text-gray-400 leading-relaxed max-w-[200px] mx-auto">Цены действительны 3 дня. Спасибо, что выбрали Aquaplaza!</p></div>
             </div>
-            <button onClick={copyToClipboard} className={`w-full py-4 rounded-2xl font-bold text-base shadow-xl shadow-blue-500/20 transition-all transform active:scale-[0.98] flex items-center justify-center gap-3 ${copied ? 'bg-green-500 text-white' : 'bg-[#007AFF] text-white hover:bg-blue-600'}`}>{copied ? <Check size={20} /> : <Copy size={20} />}{copied ? 'Скопировано!' : 'Скопировать для чата'}</button>
+            
+            <button onClick={copyToClipboard} className={`w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-blue-600 text-white active:scale-95'}`}>
+              {copied ? <Check size={20} /> : <Copy size={20} />}
+              {copied ? 'Скопировано!' : 'Скопировать текст'}
+            </button>
           </div>
         )}
       </div>
 
+      {/* SEARCH MODAL */}
       {showSearchModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md sm:rounded-3xl rounded-t-3xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 duration-300">
-             <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2"><Search size={18} className="text-blue-500" />Поиск товара</h3>
-                <button onClick={() => setShowSearchModal(false)} className="bg-gray-100 p-2 rounded-full text-gray-500"><X size={20} /></button>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl p-5 shadow-2xl animate-in slide-in-from-bottom-10">
+             <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-slate-800">Добавить товар</h3>
+                <button onClick={() => setShowSearchModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500"><X size={20} /></button>
              </div>
-             <div className="bg-gray-50 p-1 rounded-xl flex gap-1 mb-6 border border-gray-200 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                <div className="flex-1 relative">
-                   <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none"><Search size={18} className="text-gray-400" /></div>
-                   <input autoFocus type="text" placeholder="Введите артикул" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="w-full pl-10 pr-4 py-3 bg-transparent border-none text-sm font-medium focus:ring-0 outline-none" />
-                </div>
-                <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="bg-blue-600 text-white px-4 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed m-1 transition-colors">
-                  {isSearching ? <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"/> : <ArrowRight size={20} />}
-                </button>
+             
+             <div className="relative mb-3">
+                <Search size={18} className="absolute left-3 top-3.5 text-slate-400" />
+                <input 
+                  autoFocus 
+                  type="text" 
+                  placeholder="Введите артикул (напр. 32843000)" 
+                  value={searchQuery} 
+                  onChange={(e) => setSearchQuery(e.target.value)} 
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()} 
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" 
+                />
              </div>
-             <button onClick={handleManualAdd} className="w-full py-3.5 bg-gray-50 text-gray-500 font-semibold rounded-xl hover:bg-gray-100 transition-colors text-sm">Ввести вручную</button>
+             
+             <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold mb-3 disabled:opacity-50">
+               {isSearching ? 'Поиск...' : 'Найти'}
+             </button>
+             
+             <button onClick={handleManualAdd} className="w-full py-3 text-slate-500 font-medium text-sm">
+                Ввести вручную
+             </button>
           </div>
         </div>
       )}
 
+      {/* FAB */}
       {activeTab === 'editor' && (
-        <div className="fixed bottom-6 left-0 right-0 px-5 max-w-md mx-auto pointer-events-none z-10">
-          <button onClick={() => setActiveTab('preview')} className="w-full bg-[#007AFF] text-white py-4 rounded-2xl shadow-xl shadow-blue-500/30 font-bold flex items-center justify-center gap-2 pointer-events-auto active:scale-[0.98] transition-transform backdrop-blur-md border border-white/20"><FileText size={20} />Сформировать ({total.toLocaleString()} ₽)</button>
+        <div className="fixed bottom-6 left-0 right-0 px-5 max-w-md mx-auto z-10 pointer-events-none">
+          <button onClick={() => setActiveTab('preview')} className="pointer-events-auto w-full bg-blue-600 text-white py-3.5 rounded-xl shadow-lg shadow-blue-500/30 font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
+            <FileText size={20} />
+            К просмотру ({total.toLocaleString()} ₽)
+          </button>
         </div>
       )}
     </div>
