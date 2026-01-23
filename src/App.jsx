@@ -3,11 +3,12 @@ import {
   Plus, Trash2, FileText, Copy, Check, Calculator, 
   User, Briefcase, Search, ArrowRight, Package, X,
   Sparkles, Percent, Wifi, RefreshCw, Loader2,
-  Save, FolderOpen, RotateCcw, Clock, Download, Share, Image as ImageIcon
+  Save, FolderOpen, RotateCcw, Clock, Download, Share, 
+  Image as ImageIcon, Send
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "5.1"; 
+const APP_VERSION = "5.3"; 
 const API_URL = ''; 
 
 // --- ЗАПАСНЫЕ СТИЛИ ---
@@ -19,17 +20,15 @@ const FALLBACK_STYLES = `
   .input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
 `;
 
-// --- ЗАГРУЗЧИК СКРИПТОВ (Стили + html2canvas) ---
+// --- ЗАГРУЗЧИК СКРИПТОВ ---
 const useExternalScripts = () => {
   const [loaded, setLoaded] = useState(false);
   
   useEffect(() => {
-    // 1. Запасные стили
     const fallback = document.createElement('style');
     fallback.innerHTML = FALLBACK_STYLES;
     document.head.appendChild(fallback);
 
-    // 2. Tailwind CSS
     if (!document.getElementById('tailwind-script')) {
       const script = document.createElement('script');
       script.id = 'tailwind-script';
@@ -37,7 +36,6 @@ const useExternalScripts = () => {
       document.head.appendChild(script);
     }
 
-    // 3. html2canvas (для скриншотов)
     if (!document.getElementById('html2canvas-script')) {
       const script = document.createElement('script');
       script.id = 'html2canvas-script';
@@ -122,11 +120,7 @@ export default function App() {
     { sku: '32843000', name: 'Смеситель для кухни Grohe (Пример)', price: 12400, qty: 1, discount: 0, isAiGenerated: true }
   ]);
   const [copied, setCopied] = useState(false);
-  
-  // Сохраненные КП (История)
   const [savedCPs, setSavedCPs] = useState([]);
-  
-  // Ref для скриншота
   const receiptRef = useRef(null);
 
   // --- ИНИЦИАЛИЗАЦИЯ ---
@@ -150,68 +144,72 @@ export default function App() {
           setItems(d.items);
           setClientName(d.clientName || '');
           setGlobalDiscount(d.globalDiscount || 0);
+          if (d.managerName) setManagerName(d.managerName);
         }
       } catch (e) {}
     }
   }, []);
 
   useEffect(() => {
-    const draft = { items, clientName, globalDiscount };
+    const draft = { items, clientName, globalDiscount, managerName };
     localStorage.setItem('aquaplaza_draft', JSON.stringify(draft));
-  }, [items, clientName, globalDiscount]);
+  }, [items, clientName, globalDiscount, managerName]);
 
-  // --- ЛОГИКА СОХРАНЕНИЯ КАРТИНКОЙ ---
+  // --- ГЕНЕРАТОР ТЕКСТА КП ---
+  const generateCPText = () => {
+    const date = new Date().toLocaleDateString('ru-RU');
+    let text = `🌊 *Aquaplaza* | КП от ${date}\n`;
+    if (clientName) text += `👤 Клиент: ${clientName}\n`;
+    text += `\n`;
+    items.forEach((item, i) => {
+      const itemPrice = item.price * (1 - (item.discount || 0) / 100);
+      const totalItem = itemPrice * item.qty;
+      text += `${i + 1}. ${item.name}\n`;
+      if (item.sku) text += `   Арт: ${item.sku}\n`;
+      if (item.discount > 0) text += `   Цена: ${item.price.toLocaleString()} - ${item.discount}% = ${itemPrice.toLocaleString()} ₽\n`;
+      text += `   ${item.qty} шт × ${itemPrice.toLocaleString()} = ${totalItem.toLocaleString()} ₽\n\n`;
+    });
+    text += `------------------\n`;
+    if (globalDiscount > 0) text += `Доп. скидка на чек: ${globalDiscount}%\n`;
+    // Расчет итого
+    const sub = items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0);
+    const tot = sub * (1 - globalDiscount/100);
+    
+    text += `💎 *ИТОГО: ${tot.toLocaleString()} ₽*\n\n`;
+    text += `📞 Ваш менеджер: ${managerName}`;
+    return text;
+  };
+
+  // --- ОТПРАВКА В ТЕЛЕГРАМ ---
+  const handleShareTelegram = () => {
+    const text = generateCPText();
+    // Используем специальную ссылку Telegram для шаринга текста
+    const url = `https://t.me/share/url?text=${encodeURIComponent(text)}`;
+    
+    // Пытаемся открыть через Telegram SDK, если доступно
+    if (window.Telegram?.WebApp?.openTelegramLink) {
+        window.Telegram.WebApp.openTelegramLink(url);
+    } else {
+        // Иначе открываем как обычную ссылку (сработает редирект на приложение)
+        window.open(url, '_blank');
+    }
+  };
+
+  // --- СОХРАНЕНИЕ КАРТИНКОЙ ---
   const handleSaveImage = async () => {
-    if (!receiptRef.current || !window.html2canvas) {
-      alert("Инструмент для фото еще грузится, попробуйте через секунду.");
-      return;
-    }
-
+    if (!receiptRef.current || !window.html2canvas) { alert("Грузится..."); return; }
     setIsGeneratingImage(true);
-
     try {
-      // 1. Создаем скриншот
-      const canvas = await window.html2canvas(receiptRef.current, {
-        scale: 2, // Высокое качество (Retina)
-        backgroundColor: '#ffffff', // Белый фон
-        useCORS: true // Для загрузки внешних картинок (если будут)
-      });
-
-      // 2. Конвертируем в Blob (файл)
+      const canvas = await window.html2canvas(receiptRef.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
       canvas.toBlob(async (blob) => {
-        if (!blob) throw new Error("Canvas is empty");
-        
+        if (!blob) throw new Error("Empty");
         const file = new File([blob], `kp_aquaplaza_${Date.now()}.png`, { type: 'image/png' });
-
-        // 3. Пытаемся поделиться через нативное меню (Mobile)
         if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: 'КП Aquaplaza',
-              text: `Коммерческое предложение для ${clientName}`
-            });
-            setIsGeneratingImage(false);
-            return;
-          } catch (shareError) {
-            console.log("Share failed or cancelled", shareError);
-          }
+          try { await navigator.share({ files: [file], title: 'КП Aquaplaza' }); setIsGeneratingImage(false); return; } catch (e) {}
         }
-
-        // 4. Если Share не сработал (Desktop) — просто скачиваем
-        const link = document.createElement('a');
-        link.href = canvas.toDataURL('image/png');
-        link.download = `kp_${clientName || 'client'}.png`;
-        link.click();
-        setIsGeneratingImage(false);
-
+        const link = document.createElement('a'); link.href = canvas.toDataURL('image/png'); link.download = `kp.png`; link.click(); setIsGeneratingImage(false);
       }, 'image/png');
-
-    } catch (error) {
-      console.error(error);
-      alert("Ошибка при создании картинки. Попробуйте еще раз.");
-      setIsGeneratingImage(false);
-    }
+    } catch (error) { alert("Ошибка фото"); setIsGeneratingImage(false); }
   };
 
   // --- ИСТОРИЯ ---
@@ -223,7 +221,7 @@ export default function App() {
       id: Date.now(),
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-      clientName, items, globalDiscount, total: tot
+      clientName, managerName, items, globalDiscount, total: tot
     };
     const newHistory = [newCP, ...savedCPs];
     setSavedCPs(newHistory);
@@ -235,6 +233,7 @@ export default function App() {
   const handleLoadCP = (cp) => {
     if (window.confirm(`Загрузить "${cp.clientName}"?`)) {
       setClientName(cp.clientName); setItems(cp.items); setGlobalDiscount(cp.globalDiscount);
+      if (cp.managerName) setManagerName(cp.managerName);
       setShowHistoryModal(false);
     }
   };
@@ -296,23 +295,7 @@ export default function App() {
   const total = subtotal * (1 - globalDiscount / 100);
 
   const copyToClipboard = () => {
-    const date = new Date().toLocaleDateString('ru-RU');
-    let text = `🌊 *Aquaplaza* | КП от ${date}\n`;
-    if (clientName) text += `👤 Клиент: ${clientName}\n`;
-    text += `\n`;
-    items.forEach((item, i) => {
-      const itemPrice = item.price * (1 - (item.discount || 0) / 100);
-      const totalItem = itemPrice * item.qty;
-      text += `${i + 1}. ${item.name}\n`;
-      if (item.sku) text += `   Арт: ${item.sku}\n`;
-      if (item.discount > 0) text += `   Цена: ${item.price.toLocaleString()} - ${item.discount}% = ${itemPrice.toLocaleString()} ₽\n`;
-      text += `   ${item.qty} шт × ${itemPrice.toLocaleString()} = ${totalItem.toLocaleString()} ₽\n\n`;
-    });
-    text += `------------------\n`;
-    if (globalDiscount > 0) text += `Доп. скидка на чек: ${globalDiscount}%\n`;
-    text += `💎 *ИТОГО: ${total.toLocaleString()} ₽*\n\n`;
-    text += `📞 Ваш менеджер: ${managerName}`;
-
+    const text = generateCPText();
     let success = false;
     try {
       const textArea = document.createElement("textarea");
@@ -378,10 +361,18 @@ export default function App() {
                   <RotateCcw size={16} />
                </button>
             </div>
-            <div className="card">
-               <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider"><User size={14} /> Клиент</div>
-               <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя или название компании" className="w-full text-base font-medium text-slate-800 placeholder-slate-300 border-none focus:ring-0 p-0 outline-none" />
+            
+            <div className="card space-y-3">
+               <div>
+                 <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider"><User size={14} /> Клиент</div>
+                 <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя или название компании" className="w-full text-base font-medium text-slate-800 placeholder-slate-300 border-none focus:ring-0 p-0 outline-none" />
+               </div>
+               <div className="pt-2 border-t border-slate-100">
+                 <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider"><Briefcase size={14} /> Менеджер</div>
+                 <input type="text" value={managerName} onChange={(e) => setManagerName(e.target.value)} placeholder="Имя менеджера" className="w-full text-sm font-medium text-slate-600 placeholder-slate-300 border-none focus:ring-0 p-0 outline-none" />
+               </div>
             </div>
+
             <div>
               <div className="flex justify-between items-center mb-2 px-1"><span className="text-slate-400 text-xs uppercase font-bold tracking-wider flex items-center gap-2"><Package size={14} /> Товары ({items.length})</span></div>
               <div className="space-y-2">{items.map((item, index) => (<ProductRow key={index} item={item} index={index} onUpdate={updateItem} onRemove={removeItem} />))}</div>
@@ -404,7 +395,6 @@ export default function App() {
         ) : (
           /* PREVIEW */
           <div className="animate-in fade-in zoom-in-95 duration-300 pb-10">
-            {/* Обертка для скриншота - ref вешаем сюда */}
             <div ref={receiptRef} className="bg-white rounded-xl overflow-hidden shadow-lg border border-slate-100 mb-6">
               <div className="bg-blue-600 px-6 py-6 text-white">
                  <div className="flex justify-between items-start mb-4">
@@ -445,26 +435,36 @@ export default function App() {
                    </div>
                 )}
                 <div className="mt-8 pt-4 border-t border-slate-50 text-center">
-                   <p className="text-[10px] text-slate-400">Цены действительны 3 дня. Aquaplaza Online.</p>
+                   <p className="text-[10px] text-slate-400">Цены действительны 3 дня.</p>
                 </div>
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
-              <button onClick={copyToClipboard} className={`btn w-full py-3.5 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-white text-slate-700 border border-slate-200 active:scale-95'}`}>
-                {copied ? <Check size={18} /> : <Copy size={18} />}
-                {copied ? 'Скопировано!' : 'Текст'}
+            <div className="space-y-3">
+              <button 
+                onClick={handleShareTelegram} 
+                className="btn w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 bg-blue-600 text-white flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                <Send size={18} /> Отправить в Telegram
               </button>
 
-              <button 
-                onClick={handleSaveImage} 
-                disabled={isGeneratingImage}
-                className="btn w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/20 bg-blue-600 text-white flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70 disabled:scale-100"
-              >
-                {isGeneratingImage ? <Loader2 size={18} className="animate-spin"/> : <ImageIcon size={18} />}
-                {isGeneratingImage ? 'Создаю...' : 'Как фото'}
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button onClick={copyToClipboard} className={`btn w-full py-3.5 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-white text-slate-700 border border-slate-200 active:scale-95'}`}>
+                  {copied ? <Check size={18} /> : <Copy size={18} />}
+                  {copied ? 'Скопировано!' : 'Текст'}
+                </button>
+
+                <button 
+                  onClick={handleSaveImage} 
+                  disabled={isGeneratingImage}
+                  className="btn w-full py-3.5 rounded-xl font-bold shadow-sm bg-white text-slate-700 border border-slate-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70 disabled:scale-100"
+                >
+                  {isGeneratingImage ? <Loader2 size={18} className="animate-spin"/> : <ImageIcon size={18} />}
+                  {isGeneratingImage ? 'Создаю...' : 'Как фото'}
+                </button>
+              </div>
             </div>
+
           </div>
         )}
       </div>
