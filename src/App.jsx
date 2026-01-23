@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "6.0"; 
+const APP_VERSION = "6.1"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
@@ -241,13 +241,21 @@ export default function App() {
     try {
       const response = await fetch(generatedImage);
       const blob = await response.blob();
-      await navigator.clipboard.write([
-        new ClipboardItem({ [blob.type]: blob })
-      ]);
-      alert("Картинка скопирована!");
+      
+      // Создаем жесткий PNG blob для буфера
+      const pngBlob = new Blob([blob], { type: 'image/png' });
+
+      // Проверяем поддержку
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard && navigator.clipboard.write) {
+          const item = new ClipboardItem({ 'image/png': pngBlob });
+          await navigator.clipboard.write([item]);
+          alert("✅ Картинка скопирована в буфер!\n\nТеперь просто нажмите 'Вставить' в поле ввода Telegram.");
+      } else {
+          throw new Error('Clipboard API not supported');
+      }
     } catch (err) {
       console.error(err);
-      alert("Не удалось скопировать автоматически. Пожалуйста, сохраните картинку через долгий тап.");
+      alert("⚠️ Ваш телефон блокирует копирование картинок.\n\nПожалуйста, просто зажмите картинку пальцем на 2 секунды и выберите 'Копировать' или 'Поделиться'.");
     }
   };
 
@@ -470,7 +478,7 @@ export default function App() {
                 disabled={isGeneratingImage}
               >
                 {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
-                {isGeneratingImage ? 'Создаю фото...' : 'Отправить в Telegram (Фото)'}
+                {isGeneratingImage ? 'Создаю фото...' : 'Отправить в Telegram'}
               </button>
 
               <button 
