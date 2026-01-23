@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "6.3"; 
+const APP_VERSION = "6.4"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
@@ -23,16 +23,13 @@ const INTERNAL_STYLES = `
   
   .app-input-ghost { background: transparent; border: none; padding: 0; margin: 0; width: 100%; outline: none; color: #000000 !important; }
   
-  .app-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; border: none; transition: all 0.2s; active: scale(0.98); }
+  .app-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; border: none; transition: all 0.2s; text-decoration: none; box-sizing: border-box; }
   .app-btn:active { transform: scale(0.98); }
   .app-btn-primary { background-color: #2563eb; color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
-  .app-btn-primary:hover { background-color: #1d4ed8; }
   .app-btn-secondary { background-color: white; color: #374151; border: 1px solid #e5e7eb; }
-  .app-btn-secondary:hover { background-color: #f9fafb; border-color: #d1d5db; }
   .app-btn-dashed { background-color: white; color: #2563eb; border: 1px dashed #93c5fd; }
-  .app-btn-dashed:hover { background-color: #eff6ff; }
   .app-btn-icon { padding: 8px; border-radius: 8px; color: #9ca3af; background: transparent; border: none; cursor: pointer; }
-  .app-btn-icon:hover { color: #ef4444; background: #fef2f2; }
+  
   .flex-between { display: flex; justify-content: space-between; align-items: center; }
   .text-sm { font-size: 14px; }
   .text-xs { font-size: 12px; }
@@ -42,32 +39,26 @@ const INTERNAL_STYLES = `
   .text-orange { color: #f97316; }
 `;
 
-// --- ЗАГРУЗЧИК СКРИПТОВ ---
 const useExternalScripts = () => {
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     const styleTag = document.createElement('style');
     styleTag.innerHTML = INTERNAL_STYLES;
     document.head.appendChild(styleTag);
-
     if (!document.getElementById('html2canvas-script')) {
       const script = document.createElement('script');
       script.id = 'html2canvas-script';
       script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
       script.onload = () => setLoaded(true);
       document.head.appendChild(script);
-    } else {
-      setLoaded(true);
-    }
+    } else { setLoaded(true); }
   }, []);
   return loaded;
 };
 
-// --- КОМПОНЕНТЫ ---
 const ProductRow = ({ item, onUpdate, onRemove, index }) => {
   const finalPrice = item.price * (1 - (item.discount || 0) / 100);
   const totalItemSum = finalPrice * item.qty;
-
   return (
     <div className="app-card app-card-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="flex-between" style={{ alignItems: 'flex-start', marginBottom: '8px' }}>
@@ -78,44 +69,17 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
                {item.isAiGenerated && <Sparkles size={8} />}
              </span>
            )}
-           <textarea
-             rows={item.name.length > 30 ? 2 : 1}
-             placeholder="Название товара..."
-             value={item.name}
-             onChange={(e) => onUpdate(index, 'name', e.target.value)}
-             className="app-input-ghost text-sm text-bold"
-             style={{ color: '#000000', resize: 'none', minHeight: '24px' }}
-           />
+           <textarea rows={item.name.length > 30 ? 2 : 1} placeholder="Название товара..." value={item.name} onChange={(e) => onUpdate(index, 'name', e.target.value)} className="app-input-ghost text-sm text-bold" style={{ color: '#000000', resize: 'none', minHeight: '24px' }} />
         </div>
-        <button onClick={() => onRemove(index)} className="app-btn-icon">
-          <Trash2 size={18} />
-        </button>
+        <button onClick={() => onRemove(index)} className="app-btn-icon"><Trash2 size={18} /></button>
       </div>
-      
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f9fafb', padding: '8px', borderRadius: '8px' }}>
-        <div style={{ flex: 1 }}>
-          <span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Цена</span>
-          <input type="number" value={item.price === 0 ? '' : item.price} onChange={(e) => onUpdate(index, 'price', parseFloat(e.target.value) || 0)} placeholder="0" className="app-input-ghost text-bold" />
-        </div>
-        
+        <div style={{ flex: 1 }}><span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Цена</span><input type="number" value={item.price === 0 ? '' : item.price} onChange={(e) => onUpdate(index, 'price', parseFloat(e.target.value) || 0)} placeholder="0" className="app-input-ghost text-bold" /></div>
         <div style={{ width: '1px', height: '24px', background: '#e5e7eb' }}></div>
-        
-        <div style={{ width: '50px', textAlign: 'center' }}>
-          <span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Скид%</span>
-          <input type="number" placeholder="-" value={item.discount || ''} onChange={(e) => onUpdate(index, 'discount', parseFloat(e.target.value) || 0)} className="app-input-ghost text-bold text-orange" style={{ textAlign: 'center' }} />
-        </div>
-        
+        <div style={{ width: '50px', textAlign: 'center' }}><span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Скид%</span><input type="number" placeholder="-" value={item.discount || ''} onChange={(e) => onUpdate(index, 'discount', parseFloat(e.target.value) || 0)} className="app-input-ghost text-bold text-orange" style={{ textAlign: 'center' }} /></div>
         <div style={{ width: '1px', height: '24px', background: '#e5e7eb' }}></div>
-        
-        <div style={{ width: '40px', textAlign: 'center' }}>
-          <span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Шт</span>
-          <input type="number" value={item.qty} onChange={(e) => onUpdate(index, 'qty', parseInt(e.target.value) || 1)} className="app-input-ghost text-bold" style={{ textAlign: 'center' }} />
-        </div>
-        
-        <div style={{ minWidth: '70px', textAlign: 'right', paddingLeft: '8px', borderLeft: '1px solid transparent' }}>
-           <span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Сумма</span>
-           <div className="text-sm text-bold text-blue">{totalItemSum.toLocaleString()}</div>
-        </div>
+        <div style={{ width: '40px', textAlign: 'center' }}><span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Шт</span><input type="number" value={item.qty} onChange={(e) => onUpdate(index, 'qty', parseInt(e.target.value) || 1)} className="app-input-ghost text-bold" style={{ textAlign: 'center' }} /></div>
+        <div style={{ minWidth: '70px', textAlign: 'right', paddingLeft: '8px', borderLeft: '1px solid transparent' }}><span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Сумма</span><div className="text-sm text-bold text-blue">{totalItemSum.toLocaleString()}</div></div>
       </div>
     </div>
   );
@@ -123,25 +87,19 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
 
 export default function App() {
   const scriptsLoaded = useExternalScripts();
-
   const [activeTab, setActiveTab] = useState('editor');
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  
-  // Для модалки с картинкой
   const [showImageModal, setShowImageModal] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
   
-  // Данные
   const [clientName, setClientName] = useState('');
   const [managerName, setManagerName] = useState('Менеджер Aquaplaza');
   const [globalDiscount, setGlobalDiscount] = useState(0);
-  const [items, setItems] = useState([
-    { sku: '32843000', name: 'Смеситель для кухни Grohe (Пример)', price: 12400, qty: 1, discount: 0, isAiGenerated: true }
-  ]);
+  const [items, setItems] = useState([{ sku: '32843000', name: 'Смеситель для кухни Grohe (Пример)', price: 12400, qty: 1, discount: 0, isAiGenerated: true }]);
   const [copied, setCopied] = useState(false);
   const [savedCPs, setSavedCPs] = useState([]);
   const receiptRef = useRef(null);
@@ -151,21 +109,16 @@ export default function App() {
       const tg = window.Telegram.WebApp;
       tg.ready();
       try { tg.expand(); } catch (e) {}
-      if (tg.initDataUnsafe?.user?.first_name) {
-        setManagerName(`${tg.initDataUnsafe.user.first_name} (Aquaplaza)`);
-      }
+      if (tg.initDataUnsafe?.user?.first_name) setManagerName(`${tg.initDataUnsafe.user.first_name} (Aquaplaza)`);
     }
     const loadedHistory = localStorage.getItem('aquaplaza_history');
     if (loadedHistory) try { setSavedCPs(JSON.parse(loadedHistory)); } catch (e) {}
-
     const draft = localStorage.getItem('aquaplaza_draft');
     if (draft) {
       try {
         const d = JSON.parse(draft);
         if (d.items && d.items.length > 0) {
-          setItems(d.items);
-          setClientName(d.clientName || '');
-          setGlobalDiscount(d.globalDiscount || 0);
+          setItems(d.items); setClientName(d.clientName || ''); setGlobalDiscount(d.globalDiscount || 0);
           if (d.managerName) setManagerName(d.managerName);
         }
       } catch (e) {}
@@ -198,63 +151,30 @@ export default function App() {
     return text;
   };
 
-  // --- ЛОГИКА ШАРИНГА ---
-  const handleShareFile = async () => {
+  const handleShareImage = async () => {
     if (!receiptRef.current || !window.html2canvas) { alert("Подготовка..."); return; }
-    
     setIsGeneratingImage(true);
-    
     try {
-      const canvas = await window.html2canvas(receiptRef.current, { 
-        scale: 2, 
-        backgroundColor: '#ffffff', 
-        useCORS: true 
-      });
-      
+      const canvas = await window.html2canvas(receiptRef.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
       canvas.toBlob(async (blob) => {
         if (!blob) throw new Error("Empty blob");
         const file = new File([blob], `kp_aquaplaza_${Date.now()}.png`, { type: 'image/png' });
-
-        // 1. Сначала пробуем нативный шаринг ФАЙЛОМ (самый надежный для мобилок)
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({
-              files: [file],
-              title: 'Коммерческое предложение',
-              text: `КП для ${clientName || 'клиента'}`
-            });
-            setIsGeneratingImage(false);
-            return;
-          } catch (e) {
-            console.log('Share cancelled');
-          }
+          try { await navigator.share({ files: [file], title: 'Коммерческое предложение', text: `КП для ${clientName || 'клиента'}` }); setIsGeneratingImage(false); return; } catch (e) { console.log('Share cancelled'); }
         } 
-        
-        // 2. Если не сработало (например, десктоп) - открываем модалку для ручного сохранения
         const dataUrl = canvas.toDataURL('image/png');
         setGeneratedImage(dataUrl);
         setShowImageModal(true);
         setIsGeneratingImage(false);
-
       }, 'image/png');
-      
-    } catch (error) {
-      console.error(error);
-      alert("Ошибка генерации");
-      setIsGeneratingImage(false);
-    }
+    } catch (error) { console.error(error); alert("Ошибка генерации"); setIsGeneratingImage(false); }
   };
 
   const handleSaveToHistory = () => {
     if (!clientName) { alert('Введите имя клиента.'); return; }
     const sub = items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0);
     const tot = sub * (1 - globalDiscount/100);
-    const newCP = {
-      id: Date.now(),
-      date: new Date().toLocaleDateString(),
-      time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-      clientName, managerName, items, globalDiscount, total: tot
-    };
+    const newCP = { id: Date.now(), date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), clientName, managerName, items, globalDiscount, total: tot };
     const newHistory = [newCP, ...savedCPs];
     setSavedCPs(newHistory);
     localStorage.setItem('aquaplaza_history', JSON.stringify(newHistory));
@@ -312,7 +232,6 @@ export default function App() {
   const handleManualAdd = () => { setItems([...items, { sku: '', name: '', price: 0, qty: 1, discount: 0 }]); setShowSearchModal(false); };
   const updateItem = (index, field, value) => { const newItems = [...items]; newItems[index][field] = value; setItems(newItems); };
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
-  
   const subtotal = items.reduce((sum, item) => { const itemPrice = item.price * (1 - (item.discount || 0) / 100); return sum + (itemPrice * item.qty); }, 0);
   const total = subtotal * (1 - globalDiscount / 100);
 
@@ -335,28 +254,18 @@ export default function App() {
 
   if (!scriptsLoaded) return <div style={{height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', color:'#2563eb'}}><Loader2 className="animate-spin" size={32}/></div>;
 
+  // Формируем ссылку для кнопки Telegram
+  const tgLink = `https://t.me/share/url?text=${encodeURIComponent(generateCPText())}`;
+
   return (
     <div className="min-h-screen">
       {/* HEADER */}
       <div style={{ background:'rgba(255,255,255,0.9)', backdropFilter:'blur(10px)', padding:'16px', paddingBottom:'12px', borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:20 }}>
         <div className="flex-between" style={{ maxWidth:'480px', margin:'0 auto' }}>
-          <div>
-            <h1 className="text-bold" style={{ fontSize:'18px', display:'flex', alignItems:'center', gap:'8px' }}>
-              КП Менеджер <button onClick={handleReload} style={{fontSize:'10px', background:'#f3f4f6', color:'#6b7280', padding:'2px 6px', borderRadius:'99px', border:'none', cursor:'pointer'}}>v{APP_VERSION}</button>
-            </h1>
-          </div>
+          <div><h1 className="text-bold" style={{ fontSize:'18px', display:'flex', alignItems:'center', gap:'8px' }}>КП Менеджер <button onClick={handleReload} style={{fontSize:'10px', background:'#f3f4f6', color:'#6b7280', padding:'2px 6px', borderRadius:'99px', border:'none', cursor:'pointer'}}>v{APP_VERSION}</button></h1></div>
           <div style={{ display:'flex', gap:'8px' }}>
-            <button onClick={() => setShowHistoryModal(true)} style={{ position:'relative', padding:'8px', background:'#f3f4f6', border:'none', borderRadius:'10px', cursor:'pointer' }}>
-               <FolderOpen size={20} color="#4b5563" />
-               {savedCPs.length > 0 && <span style={{position:'absolute', top:'-4px', right:'-4px', background:'#2563eb', color:'white', fontSize:'9px', width:'16px', height:'16px', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', fontWeight:'bold'}}>{savedCPs.length}</span>}
-            </button>
-            <div style={{ background:'#f3f4f6', padding:'4px', borderRadius:'10px', display:'flex' }}>
-              {['editor', 'preview'].map(tab => (
-                <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding:'6px 12px', fontSize:'12px', fontWeight:'600', borderRadius:'8px', border:'none', cursor:'pointer', background: activeTab === tab ? 'white' : 'transparent', color: activeTab === tab ? '#2563eb' : '#6b7280', boxShadow: activeTab === tab ? '0 1px 2px rgba(0,0,0,0.1)' : 'none' }}>
-                  {tab === 'editor' ? 'Ред.' : 'Вид'}
-                </button>
-              ))}
-            </div>
+            <button onClick={() => setShowHistoryModal(true)} style={{ position:'relative', padding:'8px', background:'#f3f4f6', border:'none', borderRadius:'10px', cursor:'pointer' }}><FolderOpen size={20} color="#4b5563" />{savedCPs.length > 0 && <span style={{position:'absolute', top:'-4px', right:'-4px', background:'#2563eb', color:'white', fontSize:'9px', width:'16px', height:'16px', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', fontWeight:'bold'}}>{savedCPs.length}</span>}</button>
+            <div style={{ background:'#f3f4f6', padding:'4px', borderRadius:'10px', display:'flex' }}>{['editor', 'preview'].map(tab => (<button key={tab} onClick={() => setActiveTab(tab)} style={{ padding:'6px 12px', fontSize:'12px', fontWeight:'600', borderRadius:'8px', border:'none', cursor:'pointer', background: activeTab === tab ? 'white' : 'transparent', color: activeTab === tab ? '#2563eb' : '#6b7280', boxShadow: activeTab === tab ? '0 1px 2px rgba(0,0,0,0.1)' : 'none' }}>{tab === 'editor' ? 'Ред.' : 'Вид'}</button>))}</div>
           </div>
         </div>
       </div>
@@ -364,48 +273,20 @@ export default function App() {
       <div style={{ maxWidth:'480px', margin:'0 auto', padding:'16px' }}>
         {activeTab === 'editor' ? (
           <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
-            <div style={{ display:'flex', gap:'8px' }}>
-               <button onClick={handleSaveToHistory} className="app-btn app-btn-secondary" style={{ flex: 1 }}>
-                  <Save size={16} className="text-blue" /> Сохранить
-               </button>
-               <button onClick={handleClear} className="app-btn app-btn-secondary" style={{ width:'auto' }}>
-                  <RotateCcw size={16} />
-               </button>
-            </div>
-            
+            <div style={{ display:'flex', gap:'8px' }}><button onClick={handleSaveToHistory} className="app-btn app-btn-secondary" style={{ flex: 1 }}><Save size={16} className="text-blue" /> Сохранить</button><button onClick={handleClear} className="app-btn app-btn-secondary" style={{ width:'auto' }}><RotateCcw size={16} /></button></div>
             <div className="app-card">
-               <div style={{ marginBottom:'12px' }}>
-                 <div className="text-xs text-bold text-gray" style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'4px', textTransform:'uppercase' }}><User size={14} /> Клиент</div>
-                 <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя или название компании" className="app-input" style={{ fontSize:'16px', fontWeight:'500' }} />
-               </div>
-               <div style={{ paddingTop:'12px', borderTop:'1px solid #f3f4f6' }}>
-                 <div className="text-xs text-bold text-gray" style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'4px', textTransform:'uppercase' }}><Briefcase size={14} /> Менеджер</div>
-                 <input type="text" value={managerName} onChange={(e) => setManagerName(e.target.value)} placeholder="Имя менеджера" className="app-input" />
-               </div>
+               <div style={{ marginBottom:'12px' }}><div className="text-xs text-bold text-gray" style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'4px', textTransform:'uppercase' }}><User size={14} /> Клиент</div><input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя или название компании" className="app-input" style={{ fontSize:'16px', fontWeight:'500' }} /></div>
+               <div style={{ paddingTop:'12px', borderTop:'1px solid #f3f4f6' }}><div className="text-xs text-bold text-gray" style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'4px', textTransform:'uppercase' }}><Briefcase size={14} /> Менеджер</div><input type="text" value={managerName} onChange={(e) => setManagerName(e.target.value)} placeholder="Имя менеджера" className="app-input" /></div>
             </div>
-
             <div>
-              <div className="flex-between" style={{ padding:'0 4px', marginBottom:'8px' }}>
-                <span className="text-xs text-bold text-gray" style={{ display:'flex', alignItems:'center', gap:'6px', textTransform:'uppercase' }}><Package size={14} /> Товары ({items.length})</span>
-              </div>
+              <div className="flex-between" style={{ padding:'0 4px', marginBottom:'8px' }}><span className="text-xs text-bold text-gray" style={{ display:'flex', alignItems:'center', gap:'6px', textTransform:'uppercase' }}><Package size={14} /> Товары ({items.length})</span></div>
               <div>{items.map((item, index) => (<ProductRow key={index} item={item} index={index} onUpdate={updateItem} onRemove={removeItem} />))}</div>
               <button onClick={() => setShowSearchModal(true)} className="app-btn app-btn-dashed" style={{ marginTop:'12px' }}><Search size={16} /> Добавить товар</button>
             </div>
-
             <div className="app-card">
-              <div className="flex-between" style={{ marginBottom:'12px' }}>
-                <span className="text-sm text-gray">Подытог</span><span className="text-bold">{subtotal.toLocaleString()} ₽</span>
-              </div>
-              <div className="flex-between">
-                <span className="text-sm text-gray flex-between" style={{ gap:'4px' }}><Percent size={14}/> Общая скидка</span>
-                <div style={{ display:'flex', alignItems:'center', background:'#fff7ed', padding:'0 8px', borderRadius:'8px' }}>
-                  <input type="number" value={globalDiscount} onChange={(e) => setGlobalDiscount(parseFloat(e.target.value)||0)} className="app-input-ghost text-bold text-orange" style={{ width:'30px', textAlign:'right', padding:'4px 0' }} />
-                  <span className="text-orange">%</span>
-                </div>
-              </div>
-              <div className="flex-between" style={{ marginTop:'12px', paddingTop:'12px', borderTop:'1px solid #f3f4f6' }}>
-                <span className="text-sm text-bold text-gray">Итого к оплате</span><span style={{ fontSize:'20px', fontWeight:'800', color:'#1f2937' }}>{total.toLocaleString()} ₽</span>
-              </div>
+              <div className="flex-between" style={{ marginBottom:'12px' }}><span className="text-sm text-gray">Подытог</span><span className="text-bold">{subtotal.toLocaleString()} ₽</span></div>
+              <div className="flex-between"><span className="text-sm text-gray flex-between" style={{ gap:'4px' }}><Percent size={14}/> Общая скидка</span><div style={{ display:'flex', alignItems:'center', background:'#fff7ed', padding:'0 8px', borderRadius:'8px' }}><input type="number" value={globalDiscount} onChange={(e) => setGlobalDiscount(parseFloat(e.target.value)||0)} className="app-input-ghost text-bold text-orange" style={{ width:'30px', textAlign:'right', padding:'4px 0' }} /><span className="text-orange">%</span></div></div>
+              <div className="flex-between" style={{ marginTop:'12px', paddingTop:'12px', borderTop:'1px solid #f3f4f6' }}><span className="text-sm text-bold text-gray">Итого к оплате</span><span style={{ fontSize:'20px', fontWeight:'800', color:'#1f2937' }}>{total.toLocaleString()} ₽</span></div>
             </div>
           </div>
         ) : (
@@ -413,10 +294,7 @@ export default function App() {
           <div className="animate-in fade-in zoom-in-95 duration-300" style={{ paddingBottom:'80px' }}>
             <div ref={receiptRef} className="app-card" style={{ padding:'0', overflow:'hidden', border:'1px solid #e5e7eb' }}>
               <div style={{ background:'#2563eb', padding:'24px', color:'white' }}>
-                 <div className="flex-between" style={{ marginBottom:'16px', alignItems:'flex-start' }}>
-                   <div style={{ fontSize:'12px', fontWeight:'700', opacity:0.8, textTransform:'uppercase', letterSpacing:'1px' }}>Коммерческое предложение</div>
-                   <div style={{ fontSize:'12px', color:'#bfdbfe' }}>{new Date().toLocaleDateString()}</div>
-                 </div>
+                 <div className="flex-between" style={{ marginBottom:'16px', alignItems:'flex-start' }}><div style={{ fontSize:'12px', fontWeight:'700', opacity:0.8, textTransform:'uppercase', letterSpacing:'1px' }}>Коммерческое предложение</div><div style={{ fontSize:'12px', color:'#bfdbfe' }}>{new Date().toLocaleDateString()}</div></div>
                  <h2 style={{ fontSize:'32px', fontWeight:'bold', margin:0 }}>{total.toLocaleString()} ₽</h2>
               </div>
               <div style={{ padding:'20px' }}>
@@ -429,50 +307,28 @@ export default function App() {
                     const itemPrice = item.price * (1 - (item.discount || 0) / 100);
                     return (
                       <div key={i} className="flex-between" style={{ alignItems:'flex-start', fontSize:'14px' }}>
-                        <div style={{ display:'flex', gap:'12px', flex:1 }}>
-                           <span className="text-xs text-gray" style={{ paddingTop:'2px', width:'16px' }}>{i+1}</span>
-                           <div>
-                             <div className="text-bold" style={{ lineHeight:'1.4', marginBottom:'2px' }}>{item.name || 'Товар'}</div>
-                             {item.sku && <div className="text-xs text-gray">Арт: {item.sku}</div>}
-                           </div>
-                        </div>
-                        <div style={{ textAlign:'right', paddingLeft:'16px' }}>
-                           <div className="text-bold" style={{ color:'#374151' }}>{itemPrice.toLocaleString()} ₽</div>
-                           <div className="text-xs text-gray">{item.qty} шт</div>
-                        </div>
+                        <div style={{ display:'flex', gap:'12px', flex:1 }}><span className="text-xs text-gray" style={{ paddingTop:'2px', width:'16px' }}>{i+1}</span><div><div className="text-bold" style={{ lineHeight:'1.4', marginBottom:'2px' }}>{item.name || 'Товар'}</div>{item.sku && <div className="text-xs text-gray">Арт: {item.sku}</div>}</div></div>
+                        <div style={{ textAlign:'right', paddingLeft:'16px' }}><div className="text-bold" style={{ color:'#374151' }}>{itemPrice.toLocaleString()} ₽</div><div className="text-xs text-gray">{item.qty} шт</div></div>
                       </div>
                     );
                   })}
                 </div>
-                {globalDiscount > 0 && (
-                   <div className="flex-between" style={{ marginTop:'24px', background:'#fff7ed', padding:'10px 16px', borderRadius:'8px', color:'#c2410c', fontSize:'14px' }}>
-                      <span>Скидка на чек</span>
-                      <span className="text-bold">-{globalDiscount}%</span>
-                   </div>
-                )}
-                <div style={{ marginTop:'32px', paddingTop:'16px', borderTop:'1px solid #f9fafb', textAlign:'center' }}>
-                   <p className="text-xs text-gray">Цены действительны 3 дня.</p>
-                </div>
+                {globalDiscount > 0 && <div className="flex-between" style={{ marginTop:'24px', background:'#fff7ed', padding:'10px 16px', borderRadius:'8px', color:'#c2410c', fontSize:'14px' }}><span>Скидка на чек</span><span className="text-bold">-{globalDiscount}%</span></div>}
+                <div style={{ marginTop:'32px', paddingTop:'16px', borderTop:'1px solid #f9fafb', textAlign:'center' }}><p className="text-xs text-gray">Цены действительны 3 дня.</p></div>
               </div>
             </div>
             
             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
               {/* ГЛАВНАЯ КНОПКА - Share File */}
-              <button 
-                onClick={handleShareFile} 
-                className="app-btn app-btn-primary" 
-                style={{ fontSize:'16px' }}
-                disabled={isGeneratingImage}
-              >
+              <button onClick={handleShareFile} className="app-btn app-btn-primary" style={{ fontSize:'16px' }} disabled={isGeneratingImage}>
                 {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Share2 size={20} />}
                 {isGeneratingImage ? 'Создаю фото...' : '📤 Отправить файлом'}
               </button>
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
-                <button onClick={copyToClipboard} className="app-btn app-btn-secondary">
-                  {copied ? <Check size={18} /> : <Copy size={18} />}
-                  {copied ? 'Текст' : 'Текст'}
-                </button>
+                <a href={tgLink} target="_blank" className="app-btn app-btn-secondary" style={{textDecoration:'none'}}>
+                  <Send size={18} /> Текст
+                </a>
 
                 {/* Фолбэк кнопка для ПК */}
                 <button onClick={() => { setIsGeneratingImage(true); handleShareFile(); }} className="app-btn app-btn-secondary">
