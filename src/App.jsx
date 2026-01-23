@@ -4,12 +4,13 @@ import {
   User, Briefcase, Search, ArrowRight, Package, X,
   Sparkles, Percent, Wifi, RefreshCw, Loader2,
   Save, FolderOpen, RotateCcw, Clock, Download, Share, 
-  Image as ImageIcon, Send, Share2, Camera
+  Image as ImageIcon, Send, Share2, Camera, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "6.10"; 
+const APP_VERSION = "7.1"; 
 const API_URL = ''; 
+const ITEMS_PER_PAGE = 6; // Количество товаров на странице
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
 const INTERNAL_STYLES = `
@@ -96,6 +97,9 @@ export default function App() {
   const [showImageModal, setShowImageModal] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
   
+  // Пагинация
+  const [currentPage, setCurrentPage] = useState(0);
+  
   const [clientName, setClientName] = useState('');
   const [managerName, setManagerName] = useState('Менеджер Aquaplaza');
   const [globalDiscount, setGlobalDiscount] = useState(0);
@@ -151,7 +155,6 @@ export default function App() {
     return text;
   };
 
-  // --- ГЛАВНАЯ ФУНКЦИЯ ДЛЯ СКРИНШОТА ---
   const handleShowImageForScreenshot = async () => {
     if (!receiptRef.current || !window.html2canvas) { alert("Подготовка..."); return; }
     
@@ -263,6 +266,10 @@ export default function App() {
   // Формируем ссылку для кнопки Telegram
   const tgLink = `https://t.me/share/url?text=${encodeURIComponent(generateCPText())}`;
 
+  // Пагинация товаров
+  const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
+  const currentItems = items.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE);
+
   return (
     <div className="min-h-screen">
       {/* HEADER */}
@@ -301,7 +308,7 @@ export default function App() {
             {/* Карточка с крестиком закрытия */}
             <div style={{ position:'relative' }}>
                <button onClick={() => setActiveTab('editor')} className="app-btn-icon" style={{ position:'absolute', top:'-40px', right:'0', background:'#fff', boxShadow:'0 2px 8px rgba(0,0,0,0.1)' }}><X size={20}/></button>
-               <div ref={receiptRef} className="app-card" style={{ padding:'0', overflow:'hidden', border:'1px solid #e5e7eb' }}>
+               <div ref={receiptRef} className="app-card" style={{ padding:'0', overflow:'hidden', border:'1px solid #e5e7eb', minHeight:'400px' }}>
                   <div style={{ background:'#2563eb', padding:'24px', color:'white' }}>
                      <div className="flex-between" style={{ marginBottom:'16px', alignItems:'flex-start' }}><div style={{ fontSize:'12px', fontWeight:'700', opacity:0.8, textTransform:'uppercase', letterSpacing:'1px' }}>Коммерческое предложение</div><div style={{ fontSize:'12px', color:'#bfdbfe' }}>{new Date().toLocaleDateString()}</div></div>
                      <h2 style={{ fontSize:'32px', fontWeight:'bold', margin:0 }}>{total.toLocaleString()} ₽</h2>
@@ -311,28 +318,62 @@ export default function App() {
                       <div><div className="text-xs text-gray" style={{ textTransform:'uppercase', marginBottom:'4px' }}>Для кого</div><div className="text-bold">{clientName || 'Клиент'}</div></div>
                       <div style={{ textAlign:'right' }}><div className="text-xs text-gray" style={{ textTransform:'uppercase', marginBottom:'4px' }}>От кого</div><div className="text-bold">{managerName}</div></div>
                     </div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
-                      {items.map((item, i) => {
+                    
+                    {/* ТОВАРЫ (С ПАГИНАЦИЕЙ) */}
+                    <div style={{ display:'flex', flexDirection:'column', gap:'16px', minHeight: '300px' }}>
+                      {currentItems.map((item, i) => {
+                        // Важно: индекс для отображения сквозной, а не внутри страницы
+                        const realIndex = (currentPage * ITEMS_PER_PAGE) + i;
                         const itemPrice = item.price * (1 - (item.discount || 0) / 100);
                         return (
-                          <div key={i} className="flex-between" style={{ alignItems:'flex-start', fontSize:'14px' }}>
-                            <div style={{ display:'flex', gap:'12px', flex:1 }}><span className="text-xs text-gray" style={{ paddingTop:'2px', width:'16px' }}>{i+1}</span><div><div className="text-bold" style={{ lineHeight:'1.4', marginBottom:'2px' }}>{item.name || 'Товар'}</div>{item.sku && <div className="text-xs text-gray">Арт: {item.sku}</div>}</div></div>
+                          <div key={realIndex} className="flex-between" style={{ alignItems:'flex-start', fontSize:'14px' }}>
+                            <div style={{ display:'flex', gap:'12px', flex:1 }}><span className="text-xs text-gray" style={{ paddingTop:'2px', width:'16px' }}>{realIndex+1}</span><div><div className="text-bold" style={{ lineHeight:'1.4', marginBottom:'2px' }}>{item.name || 'Товар'}</div>{item.sku && <div className="text-xs text-gray">Арт: {item.sku}</div>}</div></div>
                             <div style={{ textAlign:'right', paddingLeft:'16px' }}><div className="text-bold" style={{ color:'#374151' }}>{itemPrice.toLocaleString()} ₽</div><div className="text-xs text-gray">{item.qty} шт</div></div>
                           </div>
                         );
                       })}
                     </div>
-                    {globalDiscount > 0 && <div className="flex-between" style={{ marginTop:'24px', background:'#fff7ed', padding:'10px 16px', borderRadius:'8px', color:'#c2410c', fontSize:'14px' }}><span>Скидка на чек</span><span className="text-bold">-{globalDiscount}%</span></div>}
-                    <div style={{ marginTop:'32px', paddingTop:'16px', borderTop:'1px solid #f9fafb', textAlign:'center' }}><p className="text-xs text-gray">Цены действительны 3 дня.</p></div>
+
+                    <div style={{ marginTop:'20px', paddingTop:'16px', borderTop:'1px solid #f9fafb', textAlign:'center', display:'flex', flexDirection:'column', gap:'8px' }}>
+                       {/* Пагинация - точки и текст */}
+                       {totalPages > 1 && (
+                         <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:'8px' }}>
+                            <div className="text-xs text-gray">Стр. {currentPage + 1} из {totalPages}</div>
+                         </div>
+                       )}
+                       <p className="text-xs text-gray">Цены действительны 3 дня.</p>
+                    </div>
                   </div>
                </div>
             </div>
+            
+            {/* КНОПКИ УПРАВЛЕНИЯ ПАГИНАЦИЕЙ */}
+            {totalPages > 1 && (
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '16px' }}>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(0, p - 1))} 
+                  disabled={currentPage === 0}
+                  className="app-btn-icon" 
+                  style={{ background: 'white', border: '1px solid #e5e7eb', opacity: currentPage === 0 ? 0.5 : 1 }}
+                >
+                  <ChevronLeft size={24}/>
+                </button>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} 
+                  disabled={currentPage === totalPages - 1}
+                  className="app-btn-icon" 
+                  style={{ background: 'white', border: '1px solid #e5e7eb', opacity: currentPage === totalPages - 1 ? 0.5 : 1 }}
+                >
+                  <ChevronRight size={24}/>
+                </button>
+              </div>
+            )}
             
             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
               {/* ГЛАВНАЯ КНОПКА - Show Modal */}
               <button onClick={handleShowImageForScreenshot} className="app-btn app-btn-primary" style={{ fontSize:'16px' }} disabled={isGeneratingImage}>
                 {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} />}
-                {isGeneratingImage ? 'Создаю...' : '📸 Показать для скриншота'}
+                {isGeneratingImage ? 'Создаю...' : `📸 Скриншот (Стр. ${currentPage + 1})`}
               </button>
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
