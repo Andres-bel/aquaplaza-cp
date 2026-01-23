@@ -151,22 +151,29 @@ export default function App() {
     return text;
   };
 
-  const handleDownloadImage = async () => {
+  // --- ГЛАВНАЯ ФУНКЦИЯ ДЛЯ СКРИНШОТА ---
+  const handleShowImageForScreenshot = async () => {
     if (!receiptRef.current || !window.html2canvas) { alert("Подготовка..."); return; }
+    
     setIsGeneratingImage(true);
+    
     try {
-      const canvas = await window.html2canvas(receiptRef.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+      const canvas = await window.html2canvas(receiptRef.current, { 
+        scale: 2, 
+        backgroundColor: '#ffffff', 
+        useCORS: true 
+      });
+      
       const dataUrl = canvas.toDataURL('image/png');
-      
-      const link = document.createElement('a');
-      link.href = dataUrl;
-      link.download = `kp_aquaplaza_${Date.now()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
+      setGeneratedImage(dataUrl);
+      setShowImageModal(true);
       setIsGeneratingImage(false);
-    } catch (error) { console.error(error); alert("Ошибка сохранения"); setIsGeneratingImage(false); }
+      
+    } catch (error) {
+      console.error(error);
+      alert("Ошибка при создании фото");
+      setIsGeneratingImage(false);
+    }
   };
 
   const handleSaveToHistory = () => {
@@ -322,10 +329,10 @@ export default function App() {
             </div>
             
             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-              {/* ГЛАВНАЯ КНОПКА - Force Download */}
-              <button onClick={handleDownloadImage} className="app-btn app-btn-primary" style={{ fontSize:'16px' }} disabled={isGeneratingImage}>
-                {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <ImageIcon size={20} />}
-                {isGeneratingImage ? 'Создаю...' : '💾 Сохранить в Галерею'}
+              {/* ГЛАВНАЯ КНОПКА - Show Modal */}
+              <button onClick={handleShowImageForScreenshot} className="app-btn app-btn-primary" style={{ fontSize:'16px' }} disabled={isGeneratingImage}>
+                {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} />}
+                {isGeneratingImage ? 'Создаю...' : '📸 Показать для скриншота'}
               </button>
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
@@ -338,6 +345,8 @@ export default function App() {
               </div>
             </div>
           </div>
+        ) : (
+          <div></div> 
         )}
       </div>
 
@@ -373,6 +382,22 @@ export default function App() {
                    </div>
                  ))}
              </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- МОДАЛЬНОЕ ОКНО ДЛЯ СКРИНШОТА --- */}
+      {showImageModal && generatedImage && (
+        <div style={{ position:'fixed', inset:0, zIndex:60, background:'rgba(0,0,0,0.9)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }} onClick={() => setShowImageModal(false)}>
+          <div style={{ position:'absolute', top:'20px', right:'20px', zIndex:70 }}>
+             <button onClick={() => setShowImageModal(false)} className="app-btn-icon" style={{ color:'white', background:'rgba(255,255,255,0.2)' }}><X size={24}/></button>
+          </div>
+          
+          <img src={generatedImage} alt="КП" style={{ maxWidth:'90%', maxHeight:'80vh', borderRadius:'8px', boxShadow:'0 10px 40px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()} />
+          
+          <div style={{ marginTop:'20px', color:'white', textAlign:'center', opacity:0.8 }}>
+             <div style={{ fontSize:'16px', fontWeight:'bold', marginBottom:'4px' }}>Готово!</div>
+             <div style={{ fontSize:'12px' }}>Сделайте скриншот экрана сейчас</div>
           </div>
         </div>
       )}
