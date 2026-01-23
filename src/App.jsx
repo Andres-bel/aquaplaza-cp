@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "6.4"; 
+const APP_VERSION = "6.6"; 
 const API_URL = ''; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
@@ -320,7 +320,7 @@ export default function App() {
             
             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
               {/* ГЛАВНАЯ КНОПКА - Share File */}
-              <button onClick={handleShareFile} className="app-btn app-btn-primary" style={{ fontSize:'16px' }} disabled={isGeneratingImage}>
+              <button onClick={handleShareImage} className="app-btn app-btn-primary" style={{ fontSize:'16px' }} disabled={isGeneratingImage}>
                 {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Share2 size={20} />}
                 {isGeneratingImage ? 'Создаю фото...' : '📤 Отправить файлом'}
               </button>
@@ -331,7 +331,7 @@ export default function App() {
                 </a>
 
                 {/* Фолбэк кнопка для ПК */}
-                <button onClick={() => { setIsGeneratingImage(true); handleShareFile(); }} className="app-btn app-btn-secondary">
+                <button onClick={() => { setIsGeneratingImage(true); handleShareImage(); }} className="app-btn app-btn-secondary">
                    <ImageIcon size={18} /> Показать
                 </button>
               </div>
@@ -383,15 +383,18 @@ export default function App() {
              <h3 className="text-bold" style={{ marginBottom:'12px', fontSize:'18px' }}>Готово!</h3>
              <img src={generatedImage} alt="КП" style={{ width:'100%', borderRadius:'8px', border:'1px solid #e5e7eb', marginBottom:'16px' }} />
              
-             <p className="text-sm text-bold text-blue" style={{ marginBottom:'8px' }}>
-                👇 Как отправить?
-             </p>
-             <p className="text-xs text-gray" style={{ marginBottom:'16px', lineHeight:'1.5' }}>
-                1. Зажмите картинку пальцем на 2 сек.<br/>
-                2. Выберите "Поделиться" или "Копировать".
-             </p>
+             <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={handleShareImage} className="app-btn app-btn-primary" style={{flex: 1}}>
+                   <Share size={18}/> Поделиться
+                </button>
+                <button onClick={() => setShowImageModal(false)} className="app-btn app-btn-secondary" style={{width: 'auto'}}>
+                   <X size={18}/>
+                </button>
+             </div>
              
-             <button onClick={() => setShowImageModal(false)} className="app-btn app-btn-secondary">Закрыть</button>
+             <p className="text-xs text-gray" style={{ marginTop:'12px' }}>
+                Если кнопка не сработала, зажмите картинку пальцем.
+             </p>
           </div>
         </div>
       )}
