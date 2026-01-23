@@ -8,13 +8,48 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "5.4"; 
+const APP_VERSION = "5.5"; 
 const API_URL = ''; 
 
-// --- ЗАПАСНЫЕ СТИЛИ (Минималистичные, чтобы не ломать Tailwind) ---
-const FALLBACK_STYLES = `
-  body { font-family: -apple-system, sans-serif; background: #f0f2f5; color: #333; margin: 0; padding-bottom: 80px; }
-  .card-fallback { background: white; padding: 16px; border-radius: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 12px; }
+// --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
+// Это гарантирует, что дизайн будет работать всегда, даже без внешних библиотек
+const INTERNAL_STYLES = `
+  /* Основа */
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding-bottom: 80px; -webkit-font-smoothing: antialiased; }
+  
+  /* Карточки */
+  .app-card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); margin-bottom: 12px; border: 1px solid #f3f4f6; }
+  .app-card-sm { padding: 12px; }
+  
+  /* Поля ввода */
+  .app-input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #f9fafb; font-size: 14px; outline: none; transition: border-color 0.2s; }
+  .app-input:focus { border-color: #3b82f6; background: white; }
+  .app-input-ghost { background: transparent; border: none; padding: 0; margin: 0; width: 100%; outline: none; }
+  
+  /* Кнопки */
+  .app-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; border: none; transition: all 0.2s; active: scale(0.98); }
+  .app-btn:active { transform: scale(0.98); }
+  
+  .app-btn-primary { background-color: #2563eb; color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
+  .app-btn-primary:hover { background-color: #1d4ed8; }
+  
+  .app-btn-secondary { background-color: white; color: #374151; border: 1px solid #e5e7eb; }
+  .app-btn-secondary:hover { background-color: #f9fafb; border-color: #d1d5db; }
+  
+  .app-btn-dashed { background-color: white; color: #2563eb; border: 1px dashed #93c5fd; }
+  .app-btn-dashed:hover { background-color: #eff6ff; }
+
+  .app-btn-icon { padding: 8px; border-radius: 8px; color: #9ca3af; background: transparent; border: none; cursor: pointer; }
+  .app-btn-icon:hover { color: #ef4444; background: #fef2f2; }
+
+  /* Утилиты */
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .text-sm { font-size: 14px; }
+  .text-xs { font-size: 12px; }
+  .text-bold { font-weight: 700; }
+  .text-gray { color: #6b7280; }
+  .text-blue { color: #2563eb; }
+  .text-orange { color: #f97316; }
 `;
 
 // --- ЗАГРУЗЧИК СКРИПТОВ ---
@@ -22,19 +57,12 @@ const useExternalScripts = () => {
   const [loaded, setLoaded] = useState(false);
   
   useEffect(() => {
-    const fallback = document.createElement('style');
-    fallback.innerHTML = FALLBACK_STYLES;
-    document.head.appendChild(fallback);
+    // 1. Вставляем наши гарантированные стили
+    const styleTag = document.createElement('style');
+    styleTag.innerHTML = INTERNAL_STYLES;
+    document.head.appendChild(styleTag);
 
-    // Грузим Tailwind
-    if (!document.getElementById('tailwind-script')) {
-      const script = document.createElement('script');
-      script.id = 'tailwind-script';
-      script.src = "https://cdn.tailwindcss.com";
-      document.head.appendChild(script);
-    }
-
-    // Грузим html2canvas
+    // 2. Грузим html2canvas для скриншотов
     if (!document.getElementById('html2canvas-script')) {
       const script = document.createElement('script');
       script.id = 'html2canvas-script';
@@ -44,6 +72,7 @@ const useExternalScripts = () => {
     } else {
       setLoaded(true);
     }
+    // Tailwind грузить не будем, так как INTERNAL_STYLES надежнее в Telegram WebApp
   }, []);
   
   return loaded;
@@ -55,11 +84,11 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
   const totalItemSum = finalPrice * item.qty;
 
   return (
-    <div className="bg-white p-3 sm:p-4 rounded-xl shadow-sm border border-gray-100 mb-3 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="flex justify-between items-start gap-3 mb-2">
-        <div className="flex-1 min-w-0">
+    <div className="app-card app-card-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div className="flex-between" style={{ alignItems: 'flex-start', marginBottom: '8px' }}>
+        <div style={{ flex: 1, marginRight: '8px' }}>
            {item.sku && (
-             <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded tracking-wide mb-1 inline-flex items-center gap-1 ${item.isAiGenerated ? 'bg-orange-50 text-orange-500' : 'bg-slate-100 text-slate-500'}`}>
+             <span className="text-xs text-blue text-bold" style={{ backgroundColor: '#eff6ff', padding: '2px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                #{item.sku}
                {item.isAiGenerated && <Sparkles size={8} />}
              </span>
@@ -69,32 +98,38 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
              placeholder="Название товара..."
              value={item.name}
              onChange={(e) => onUpdate(index, 'name', e.target.value)}
-             className="w-full text-sm font-medium text-gray-800 placeholder-gray-300 bg-transparent border-none focus:ring-0 p-0 resize-none leading-tight outline-none"
-             style={{ minHeight: '24px' }}
+             className="app-input-ghost text-sm text-bold"
+             style={{ color: '#1f2937', resize: 'none', minHeight: '24px' }}
            />
         </div>
-        <button onClick={() => onRemove(index)} className="text-gray-300 hover:text-red-500 p-1.5 -mr-1 transition-colors">
-          <Trash2 size={16} />
+        <button onClick={() => onRemove(index)} className="app-btn-icon">
+          <Trash2 size={18} />
         </button>
       </div>
-      <div className="flex items-center gap-2 bg-gray-50/80 p-2 rounded-lg text-xs sm:text-sm">
-        <div className="flex-1 relative min-w-[60px]">
-          <span className="text-[9px] text-gray-400 block mb-0.5">Цена</span>
-          <input type="number" value={item.price === 0 ? '' : item.price} onChange={(e) => onUpdate(index, 'price', parseFloat(e.target.value) || 0)} placeholder="0" className="w-full bg-transparent font-semibold text-gray-700 border-none focus:ring-0 p-0 outline-none" />
+      
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#f9fafb', padding: '8px', borderRadius: '8px' }}>
+        <div style={{ flex: 1 }}>
+          <span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Цена</span>
+          <input type="number" value={item.price === 0 ? '' : item.price} onChange={(e) => onUpdate(index, 'price', parseFloat(e.target.value) || 0)} placeholder="0" className="app-input-ghost text-bold" />
         </div>
-        <div className="w-px h-6 bg-gray-200"></div>
-        <div className="w-12 text-center">
-          <span className="text-[9px] text-gray-400 block mb-0.5">Скидка%</span>
-          <input type="number" placeholder="-" value={item.discount || ''} onChange={(e) => onUpdate(index, 'discount', parseFloat(e.target.value) || 0)} className="w-full bg-transparent text-center font-semibold text-orange-500 border-none focus:ring-0 p-0 placeholder-gray-300 outline-none" />
+        
+        <div style={{ width: '1px', height: '24px', background: '#e5e7eb' }}></div>
+        
+        <div style={{ width: '50px', textAlign: 'center' }}>
+          <span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Скид%</span>
+          <input type="number" placeholder="-" value={item.discount || ''} onChange={(e) => onUpdate(index, 'discount', parseFloat(e.target.value) || 0)} className="app-input-ghost text-bold text-orange" style={{ textAlign: 'center' }} />
         </div>
-        <div className="w-px h-6 bg-gray-200"></div>
-        <div className="w-10 text-center">
-          <span className="text-[9px] text-gray-400 block mb-0.5">Шт</span>
-          <input type="number" value={item.qty} onChange={(e) => onUpdate(index, 'qty', parseInt(e.target.value) || 1)} className="w-full bg-transparent text-center font-semibold text-gray-700 border-none focus:ring-0 p-0 outline-none" />
+        
+        <div style={{ width: '1px', height: '24px', background: '#e5e7eb' }}></div>
+        
+        <div style={{ width: '40px', textAlign: 'center' }}>
+          <span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Шт</span>
+          <input type="number" value={item.qty} onChange={(e) => onUpdate(index, 'qty', parseInt(e.target.value) || 1)} className="app-input-ghost text-bold" style={{ textAlign: 'center' }} />
         </div>
-        <div className="min-w-[70px] text-right pl-2 border-l border-transparent">
-           <span className="text-[9px] text-gray-400 block mb-0.5">Сумма</span>
-           <div className="font-bold text-blue-600 leading-none">{totalItemSum.toLocaleString()}</div>
+        
+        <div style={{ minWidth: '70px', textAlign: 'right', paddingLeft: '8px', borderLeft: '1px solid transparent' }}>
+           <span className="text-xs text-gray" style={{ display: 'block', marginBottom: '2px' }}>Сумма</span>
+           <div className="text-sm text-bold text-blue">{totalItemSum.toLocaleString()}</div>
         </div>
       </div>
     </div>
@@ -111,7 +146,7 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   
-  // Данные КП
+  // Данные
   const [clientName, setClientName] = useState('');
   const [managerName, setManagerName] = useState('Менеджер Aquaplaza');
   const [globalDiscount, setGlobalDiscount] = useState(0);
@@ -154,7 +189,7 @@ export default function App() {
     localStorage.setItem('aquaplaza_draft', JSON.stringify(draft));
   }, [items, clientName, globalDiscount, managerName]);
 
-  // --- ГЕНЕРАТОР ТЕКСТА КП ---
+  // --- ЛОГИКА ---
   const generateCPText = () => {
     const date = new Date().toLocaleDateString('ru-RU');
     let text = `🌊 *Aquaplaza* | КП от ${date}\n`;
@@ -162,34 +197,27 @@ export default function App() {
     text += `\n`;
     items.forEach((item, i) => {
       const itemPrice = item.price * (1 - (item.discount || 0) / 100);
-      const totalItem = itemPrice * item.qty;
       text += `${i + 1}. ${item.name}\n`;
       if (item.sku) text += `   Арт: ${item.sku}\n`;
       if (item.discount > 0) text += `   Цена: ${item.price.toLocaleString()} - ${item.discount}% = ${itemPrice.toLocaleString()} ₽\n`;
-      text += `   ${item.qty} шт × ${itemPrice.toLocaleString()} = ${totalItem.toLocaleString()} ₽\n\n`;
+      text += `   ${item.qty} шт × ${itemPrice.toLocaleString()} = ${(itemPrice * item.qty).toLocaleString()} ₽\n\n`;
     });
     text += `------------------\n`;
     if (globalDiscount > 0) text += `Доп. скидка на чек: ${globalDiscount}%\n`;
     const sub = items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0);
     const tot = sub * (1 - globalDiscount/100);
-    
     text += `💎 *ИТОГО: ${tot.toLocaleString()} ₽*\n\n`;
     text += `📞 Ваш менеджер: ${managerName}`;
     return text;
   };
 
-  // --- ОТПРАВКА В ТЕЛЕГРАМ ---
   const handleShareTelegram = () => {
     const text = generateCPText();
     const url = `https://t.me/share/url?text=${encodeURIComponent(text)}`;
-    if (window.Telegram?.WebApp?.openTelegramLink) {
-        window.Telegram.WebApp.openTelegramLink(url);
-    } else {
-        window.open(url, '_blank');
-    }
+    if (window.Telegram?.WebApp?.openTelegramLink) window.Telegram.WebApp.openTelegramLink(url);
+    else window.open(url, '_blank');
   };
 
-  // --- СОХРАНЕНИЕ КАРТИНКОЙ ---
   const handleSaveImage = async () => {
     if (!receiptRef.current || !window.html2canvas) { alert("Грузится..."); return; }
     setIsGeneratingImage(true);
@@ -206,7 +234,6 @@ export default function App() {
     } catch (error) { alert("Ошибка фото"); setIsGeneratingImage(false); }
   };
 
-  // --- ИСТОРИЯ ---
   const handleSaveToHistory = () => {
     if (!clientName) { alert('Введите имя клиента.'); return; }
     const sub = items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0);
@@ -221,7 +248,7 @@ export default function App() {
     setSavedCPs(newHistory);
     localStorage.setItem('aquaplaza_history', JSON.stringify(newHistory));
     if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
-    alert('✅ Сохранено в историю!');
+    alert('✅ Сохранено');
   };
 
   const handleLoadCP = (cp) => {
@@ -248,7 +275,6 @@ export default function App() {
     }
   };
 
-  // --- ПОИСК ---
   const handleSearch = async () => {
     if (!searchQuery) return;
     setIsSearching(true);
@@ -272,20 +298,11 @@ export default function App() {
     finally { setIsSearching(false); }
   };
 
-  // --- BASE LOGIC ---
-  const handleManualAdd = () => {
-    setItems([...items, { sku: '', name: '', price: 0, qty: 1, discount: 0 }]);
-    setShowSearchModal(false);
-  };
-  const updateItem = (index, field, value) => {
-    const newItems = [...items]; newItems[index][field] = value; setItems(newItems);
-  };
+  const handleManualAdd = () => { setItems([...items, { sku: '', name: '', price: 0, qty: 1, discount: 0 }]); setShowSearchModal(false); };
+  const updateItem = (index, field, value) => { const newItems = [...items]; newItems[index][field] = value; setItems(newItems); };
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
   
-  const subtotal = items.reduce((sum, item) => {
-    const itemPrice = item.price * (1 - (item.discount || 0) / 100);
-    return sum + (itemPrice * item.qty);
-  }, 0);
+  const subtotal = items.reduce((sum, item) => { const itemPrice = item.price * (1 - (item.discount || 0) / 100); return sum + (itemPrice * item.qty); }, 0);
   const total = subtotal * (1 - globalDiscount / 100);
 
   const copyToClipboard = () => {
@@ -298,7 +315,6 @@ export default function App() {
       document.body.appendChild(textArea); textArea.focus(); textArea.select();
       success = document.execCommand('copy'); document.body.removeChild(textArea);
     } catch (err) { success = false; }
-
     if (success) { setCopied(true); setTimeout(() => setCopied(false), 2000); } 
     else if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); } 
     else { alert("Скопируйте вручную"); }
@@ -306,36 +322,26 @@ export default function App() {
 
   const handleReload = () => window.location.reload();
 
-  if (!scriptsLoaded) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'sans-serif' }}>
-        <Loader2 className="animate-spin text-blue-600 mb-2" size={32} />
-        <div style={{ color: '#666' }}>Загрузка...</div>
-      </div>
-    );
-  }
+  if (!scriptsLoaded) return <div style={{height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', color:'#2563eb'}}><Loader2 className="animate-spin" size={32}/></div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-24 selection:bg-blue-100">
+    <div className="min-h-screen">
       {/* HEADER */}
-      <div className="bg-white/80 backdrop-blur-md px-4 pt-12 pb-3 shadow-sm sticky top-0 z-20 border-b border-slate-100">
-        <div className="flex justify-between items-center max-w-md mx-auto">
+      <div style={{ background:'rgba(255,255,255,0.9)', backdropFilter:'blur(10px)', padding:'16px', paddingBottom:'12px', borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:20 }}>
+        <div className="flex-between" style={{ maxWidth:'480px', margin:'0 auto' }}>
           <div>
-            <h1 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              КП Менеджер
-              <button onClick={handleReload} className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1 hover:bg-slate-200">
-                 v{APP_VERSION}
-              </button>
+            <h1 className="text-bold" style={{ fontSize:'18px', display:'flex', alignItems:'center', gap:'8px' }}>
+              КП Менеджер <button onClick={handleReload} style={{fontSize:'10px', background:'#f3f4f6', color:'#6b7280', padding:'2px 6px', borderRadius:'99px', border:'none', cursor:'pointer'}}>v{APP_VERSION}</button>
             </h1>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => setShowHistoryModal(true)} className="p-2 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors relative">
-               <FolderOpen size={20} />
-               {savedCPs.length > 0 && <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{savedCPs.length}</span>}
+          <div style={{ display:'flex', gap:'8px' }}>
+            <button onClick={() => setShowHistoryModal(true)} style={{ position:'relative', padding:'8px', background:'#f3f4f6', border:'none', borderRadius:'10px', cursor:'pointer' }}>
+               <FolderOpen size={20} color="#4b5563" />
+               {savedCPs.length > 0 && <span style={{position:'absolute', top:'-4px', right:'-4px', background:'#2563eb', color:'white', fontSize:'9px', width:'16px', height:'16px', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'50%', fontWeight:'bold'}}>{savedCPs.length}</span>}
             </button>
-            <div className="flex bg-slate-100 p-1 rounded-xl">
+            <div style={{ background:'#f3f4f6', padding:'4px', borderRadius:'10px', display:'flex' }}>
               {['editor', 'preview'].map(tab => (
-                <button key={tab} onClick={() => setActiveTab(tab)} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding:'6px 12px', fontSize:'12px', fontWeight:'600', borderRadius:'8px', border:'none', cursor:'pointer', background: activeTab === tab ? 'white' : 'transparent', color: activeTab === tab ? '#2563eb' : '#6b7280', boxShadow: activeTab === tab ? '0 1px 2px rgba(0,0,0,0.1)' : 'none' }}>
                   {tab === 'editor' ? 'Ред.' : 'Вид'}
                 </button>
               ))}
@@ -344,154 +350,151 @@ export default function App() {
         </div>
       </div>
 
-      <div className="max-w-md mx-auto p-4 sm:p-5">
+      <div style={{ maxWidth:'480px', margin:'0 auto', padding:'16px' }}>
         {activeTab === 'editor' ? (
-          <div className="space-y-4">
-            <div className="flex gap-2 overflow-x-auto pb-1">
-               <button onClick={handleSaveToHistory} className="flex-1 bg-white border border-slate-200 text-slate-700 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-slate-50 shadow-sm active:scale-95 transition-transform">
-                  <Save size={16} className="text-blue-600" /> Сохранить
+          <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
+            <div style={{ display:'flex', gap:'8px' }}>
+               <button onClick={handleSaveToHistory} className="app-btn app-btn-secondary" style={{ flex: 1 }}>
+                  <Save size={16} className="text-blue" /> Сохранить
                </button>
-               <button onClick={handleClear} className="bg-white border border-slate-200 text-slate-400 py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:text-red-500 hover:border-red-100 shadow-sm active:scale-95 transition-transform">
+               <button onClick={handleClear} className="app-btn app-btn-secondary" style={{ width:'auto' }}>
                   <RotateCcw size={16} />
                </button>
             </div>
             
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 space-y-3">
-               <div>
-                 <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider"><User size={14} /> Клиент</div>
-                 <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя или название компании" className="w-full text-base font-medium text-slate-800 placeholder-slate-300 border-none focus:ring-0 p-0 outline-none" />
+            <div className="app-card">
+               <div style={{ marginBottom:'12px' }}>
+                 <div className="text-xs text-bold text-gray" style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'4px', textTransform:'uppercase' }}><User size={14} /> Клиент</div>
+                 <input type="text" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Имя или название компании" className="app-input" style={{ fontSize:'16px', fontWeight:'500' }} />
                </div>
-               <div className="pt-2 border-t border-slate-100">
-                 <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs uppercase font-bold tracking-wider"><Briefcase size={14} /> Менеджер</div>
-                 <input type="text" value={managerName} onChange={(e) => setManagerName(e.target.value)} placeholder="Имя менеджера" className="w-full text-sm font-medium text-slate-600 placeholder-slate-300 border-none focus:ring-0 p-0 outline-none" />
+               <div style={{ paddingTop:'12px', borderTop:'1px solid #f3f4f6' }}>
+                 <div className="text-xs text-bold text-gray" style={{ display:'flex', alignItems:'center', gap:'6px', marginBottom:'4px', textTransform:'uppercase' }}><Briefcase size={14} /> Менеджер</div>
+                 <input type="text" value={managerName} onChange={(e) => setManagerName(e.target.value)} placeholder="Имя менеджера" className="app-input" />
                </div>
             </div>
 
             <div>
-              <div className="flex justify-between items-center mb-2 px-1"><span className="text-slate-400 text-xs uppercase font-bold tracking-wider flex items-center gap-2"><Package size={14} /> Товары ({items.length})</span></div>
-              <div className="space-y-2">{items.map((item, index) => (<ProductRow key={index} item={item} index={index} onUpdate={updateItem} onRemove={removeItem} />))}</div>
-              <button onClick={() => setShowSearchModal(true)} className="w-full mt-3 py-3 bg-white border border-dashed border-blue-300 text-blue-600 rounded-xl font-medium text-sm hover:bg-blue-50 transition-all flex items-center justify-center gap-2 active:scale-95"><Search size={16} /> Добавить товар</button>
+              <div className="flex-between" style={{ padding:'0 4px', marginBottom:'8px' }}>
+                <span className="text-xs text-bold text-gray" style={{ display:'flex', alignItems:'center', gap:'6px', textTransform:'uppercase' }}><Package size={14} /> Товары ({items.length})</span>
+              </div>
+              <div>{items.map((item, index) => (<ProductRow key={index} item={item} index={index} onUpdate={updateItem} onRemove={removeItem} />))}</div>
+              <button onClick={() => setShowSearchModal(true)} className="app-btn app-btn-dashed" style={{ marginTop:'12px' }}><Search size={16} /> Добавить товар</button>
             </div>
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 mt-4">
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-sm text-slate-500"><span>Подытог</span><span>{subtotal.toLocaleString()} ₽</span></div>
-                <div className="flex justify-between items-center text-sm text-slate-500">
-                  <span className="flex items-center gap-1"><Percent size={14}/> Общая скидка</span>
-                  <div className="flex items-center bg-orange-50 rounded px-2">
-                    <input type="number" value={globalDiscount} onChange={(e) => setGlobalDiscount(parseFloat(e.target.value)||0)} className="w-8 bg-transparent text-right py-0.5 text-orange-600 font-bold focus:ring-0 border-none p-0 text-sm outline-none" />
-                    <span className="text-orange-400">%</span>
-                  </div>
+
+            <div className="app-card">
+              <div className="flex-between" style={{ marginBottom:'12px' }}>
+                <span className="text-sm text-gray">Подытог</span><span className="text-bold">{subtotal.toLocaleString()} ₽</span>
+              </div>
+              <div className="flex-between">
+                <span className="text-sm text-gray flex-between" style={{ gap:'4px' }}><Percent size={14}/> Общая скидка</span>
+                <div style={{ display:'flex', alignItems:'center', background:'#fff7ed', padding:'0 8px', borderRadius:'8px' }}>
+                  <input type="number" value={globalDiscount} onChange={(e) => setGlobalDiscount(parseFloat(e.target.value)||0)} className="app-input-ghost text-bold text-orange" style={{ width:'30px', textAlign:'right', padding:'4px 0' }} />
+                  <span className="text-orange">%</span>
                 </div>
               </div>
-              <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline"><span className="text-slate-400 font-medium text-sm">Итого к оплате</span><span className="text-xl font-bold text-slate-900">{total.toLocaleString()} ₽</span></div>
+              <div className="flex-between" style={{ marginTop:'12px', paddingTop:'12px', borderTop:'1px solid #f3f4f6' }}>
+                <span className="text-sm text-bold text-gray">Итого к оплате</span><span style={{ fontSize:'20px', fontWeight:'800', color:'#1f2937' }}>{total.toLocaleString()} ₽</span>
+              </div>
             </div>
           </div>
         ) : (
           /* PREVIEW */
-          <div className="animate-in fade-in zoom-in-95 duration-300 pb-10">
-            <div ref={receiptRef} className="bg-white rounded-xl overflow-hidden shadow-lg border border-slate-100 mb-6">
-              <div className="bg-blue-600 px-6 py-6 text-white">
-                 <div className="flex justify-between items-start mb-4">
-                   <div className="opacity-80 text-xs font-bold uppercase tracking-wider">Коммерческое предложение</div>
-                   <div className="text-blue-100 text-xs">{new Date().toLocaleDateString()}</div>
+          <div className="animate-in fade-in zoom-in-95 duration-300" style={{ paddingBottom:'80px' }}>
+            <div ref={receiptRef} className="app-card" style={{ padding:'0', overflow:'hidden', border:'1px solid #e5e7eb' }}>
+              <div style={{ background:'#2563eb', padding:'24px', color:'white' }}>
+                 <div className="flex-between" style={{ marginBottom:'16px', alignItems:'flex-start' }}>
+                   <div style={{ fontSize:'12px', fontWeight:'700', opacity:0.8, textTransform:'uppercase', letterSpacing:'1px' }}>Коммерческое предложение</div>
+                   <div style={{ fontSize:'12px', color:'#bfdbfe' }}>{new Date().toLocaleDateString()}</div>
                  </div>
-                 <h2 className="text-3xl font-bold">{total.toLocaleString()} ₽</h2>
+                 <h2 style={{ fontSize:'32px', fontWeight:'bold', margin:0 }}>{total.toLocaleString()} ₽</h2>
               </div>
-              <div className="p-5">
-                <div className="flex justify-between mb-6 pb-4 border-b border-slate-100">
-                  <div><div className="text-[10px] text-slate-400 uppercase tracking-wide">Для кого</div><div className="font-semibold text-slate-800">{clientName || 'Клиент'}</div></div>
-                  <div className="text-right"><div className="text-[10px] text-slate-400 uppercase tracking-wide">От кого</div><div className="font-semibold text-slate-800">{managerName.split(' ')[0]}</div></div>
+              <div style={{ padding:'20px' }}>
+                <div className="flex-between" style={{ marginBottom:'24px', paddingBottom:'16px', borderBottom:'1px solid #f3f4f6' }}>
+                  <div><div className="text-xs text-gray" style={{ textTransform:'uppercase', marginBottom:'4px' }}>Для кого</div><div className="text-bold">{clientName || 'Клиент'}</div></div>
+                  <div style={{ textAlign:'right' }}><div className="text-xs text-gray" style={{ textTransform:'uppercase', marginBottom:'4px' }}>От кого</div><div className="text-bold">{managerName}</div></div>
                 </div>
-                <div className="space-y-4">
+                <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
                   {items.map((item, i) => {
                     const itemPrice = item.price * (1 - (item.discount || 0) / 100);
                     return (
-                      <div key={i} className="flex justify-between text-sm">
-                        <div className="flex gap-3">
-                           <span className="text-slate-300 font-mono text-xs pt-0.5">{i+1}</span>
+                      <div key={i} className="flex-between" style={{ alignItems:'flex-start', fontSize:'14px' }}>
+                        <div style={{ display:'flex', gap:'12px', flex:1 }}>
+                           <span className="text-xs text-gray" style={{ paddingTop:'2px', width:'16px' }}>{i+1}</span>
                            <div>
-                             <div className="font-medium text-slate-800 leading-snug">{item.name || 'Товар'}</div>
-                             {item.sku && <div className="text-[10px] text-slate-400 mt-0.5">Арт: {item.sku}</div>}
+                             <div className="text-bold" style={{ lineHeight:'1.4', marginBottom:'2px' }}>{item.name || 'Товар'}</div>
+                             {item.sku && <div className="text-xs text-gray">Арт: {item.sku}</div>}
                            </div>
                         </div>
-                        <div className="text-right pl-4 whitespace-nowrap">
-                           <div className="font-semibold text-slate-700">{itemPrice.toLocaleString()} ₽</div>
-                           <div className="text-[10px] text-slate-400">{item.qty} шт</div>
+                        <div style={{ textAlign:'right', paddingLeft:'16px' }}>
+                           <div className="text-bold" style={{ color:'#374151' }}>{itemPrice.toLocaleString()} ₽</div>
+                           <div className="text-xs text-gray">{item.qty} шт</div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
                 {globalDiscount > 0 && (
-                   <div className="mt-6 flex justify-between text-sm text-orange-600 bg-orange-50 px-3 py-2 rounded-lg">
+                   <div className="flex-between" style={{ marginTop:'24px', background:'#fff7ed', padding:'10px 16px', borderRadius:'8px', color:'#c2410c', fontSize:'14px' }}>
                       <span>Скидка на чек</span>
-                      <span className="font-bold">-{globalDiscount}%</span>
+                      <span className="text-bold">-{globalDiscount}%</span>
                    </div>
                 )}
-                <div className="mt-8 pt-4 border-t border-slate-50 text-center">
-                   <p className="text-[10px] text-slate-400">Цены действительны 3 дня.</p>
+                <div style={{ marginTop:'32px', paddingTop:'16px', borderTop:'1px solid #f9fafb', textAlign:'center' }}>
+                   <p className="text-xs text-gray">Цены действительны 3 дня.</p>
                 </div>
               </div>
             </div>
             
-            <div className="space-y-3">
-              <button 
-                onClick={handleShareTelegram} 
-                className="w-full py-3.5 rounded-xl font-bold shadow-lg shadow-blue-500/30 bg-blue-600 text-white flex items-center justify-center gap-2 active:scale-95 transition-all"
-              >
-                <Send size={18} /> Отправить в Telegram
+            <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+              <button onClick={handleShareTelegram} className="app-btn app-btn-primary" style={{ fontSize:'16px' }}>
+                <Send size={20} /> Отправить в Telegram
               </button>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button onClick={copyToClipboard} className={`w-full py-3.5 rounded-xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 ${copied ? 'bg-green-500 text-white' : 'bg-white text-slate-700 border border-slate-200 active:scale-95'}`}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'12px' }}>
+                <button onClick={copyToClipboard} className="app-btn app-btn-secondary">
                   {copied ? <Check size={18} /> : <Copy size={18} />}
-                  {copied ? 'Скопировано!' : 'Текст'}
+                  {copied ? 'Скопировано' : 'Текст'}
                 </button>
 
-                <button 
-                  onClick={handleSaveImage} 
-                  disabled={isGeneratingImage}
-                  className="w-full py-3.5 rounded-xl font-bold shadow-sm bg-white text-slate-700 border border-slate-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70 disabled:scale-100"
-                >
+                <button onClick={handleSaveImage} disabled={isGeneratingImage} className="app-btn app-btn-secondary" style={{ opacity: isGeneratingImage ? 0.7 : 1 }}>
                   {isGeneratingImage ? <Loader2 size={18} className="animate-spin"/> : <ImageIcon size={18} />}
                   {isGeneratingImage ? 'Создаю...' : 'Как фото'}
                 </button>
               </div>
             </div>
-
           </div>
         )}
       </div>
 
       {showSearchModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full max-w-md sm:rounded-2xl rounded-t-2xl p-5 shadow-2xl animate-in slide-in-from-bottom-10">
-             <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-slate-800">Добавить товар</h3>
-                <button onClick={() => setShowSearchModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500"><X size={20} /></button>
+        <div style={{ position:'fixed', inset:0, zIndex:50, display:'flex', alignItems:'flex-end', justifyContent:'center', background:'rgba(0,0,0,0.3)', backdropFilter:'blur(2px)' }}>
+          <div className="animate-in slide-in-from-bottom-10" style={{ background:'white', width:'100%', maxWidth:'480px', borderRadius:'20px 20px 0 0', padding:'20px', boxShadow:'0 -4px 20px rgba(0,0,0,0.1)' }}>
+             <div className="flex-between" style={{ marginBottom:'16px' }}>
+                <h3 className="text-bold" style={{ fontSize:'18px' }}>Добавить товар</h3>
+                <button onClick={() => setShowSearchModal(false)} className="app-btn-icon" style={{ background:'#f3f4f6' }}><X size={20} /></button>
              </div>
-             <div className="relative mb-3">
-                <Search size={18} className="absolute left-3 top-3.5 text-slate-400" />
-                <input autoFocus type="text" placeholder="Введите артикул" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
+             <div style={{ position:'relative', marginBottom:'12px' }}>
+                <Search size={18} style={{ position:'absolute', left:'12px', top:'14px', color:'#9ca3af' }} />
+                <input autoFocus type="text" placeholder="Введите артикул" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="app-input" style={{ paddingLeft:'40px', fontSize:'16px', padding:'12px 12px 12px 40px' }} />
              </div>
-             <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold mb-3 disabled:opacity-50">{isSearching ? 'Поиск...' : 'Найти'}</button>
-             <button onClick={handleManualAdd} className="w-full py-3 text-slate-500 font-medium text-sm">Ввести вручную</button>
+             <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="app-btn app-btn-primary" style={{ marginBottom:'12px', opacity: (isSearching || !searchQuery) ? 0.5 : 1 }}>{isSearching ? 'Поиск...' : 'Найти'}</button>
+             <button onClick={handleManualAdd} className="app-btn" style={{ background:'transparent', color:'#6b7280' }}>Ввести вручную</button>
           </div>
         </div>
       )}
 
       {showHistoryModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/30 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full max-w-md sm:rounded-t-2xl h-[80vh] flex flex-col shadow-2xl animate-in slide-in-from-bottom-10">
-             <div className="flex justify-between items-center p-5 border-b border-slate-100">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2"><FolderOpen size={20} className="text-blue-600"/> История ({savedCPs.length})</h3>
-                <button onClick={() => setShowHistoryModal(false)} className="bg-slate-100 p-2 rounded-full text-slate-500"><X size={20} /></button>
+        <div style={{ position:'fixed', inset:0, zIndex:50, display:'flex', alignItems:'flex-end', justifyContent:'center', background:'rgba(0,0,0,0.3)', backdropFilter:'blur(2px)' }}>
+          <div className="animate-in slide-in-from-bottom-10" style={{ background:'white', width:'100%', maxWidth:'480px', borderRadius:'20px 20px 0 0', height:'80vh', display:'flex', flexDirection:'column', boxShadow:'0 -4px 20px rgba(0,0,0,0.1)' }}>
+             <div className="flex-between" style={{ padding:'20px', borderBottom:'1px solid #f3f4f6' }}>
+                <h3 className="text-bold" style={{ fontSize:'18px', display:'flex', alignItems:'center', gap:'8px' }}><FolderOpen size={20} className="text-blue"/> История ({savedCPs.length})</h3>
+                <button onClick={() => setShowHistoryModal(false)} className="app-btn-icon" style={{ background:'#f3f4f6' }}><X size={20} /></button>
              </div>
-             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
-               {savedCPs.length === 0 ? <div className="text-center text-slate-400 mt-10"><FolderOpen size={48} className="mx-auto mb-3 opacity-20"/><p>Пусто</p></div> : savedCPs.map((cp) => (
-                   <div key={cp.id} onClick={() => handleLoadCP(cp)} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 active:scale-[0.98] transition-transform cursor-pointer">
-                     <div className="flex justify-between items-start mb-2"><h4 className="font-bold text-slate-800">{cp.clientName}</h4><span className="text-xs text-blue-600 font-bold bg-blue-50 px-2 py-1 rounded-full">{cp.total.toLocaleString()} ₽</span></div>
-                     <div className="flex justify-between items-end"><div className="text-xs text-slate-400 flex items-center gap-1"><Clock size={12}/> {cp.date} • {cp.items.length} поз.</div><button onClick={(e) => handleDeleteCP(e, cp.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button></div>
+             <div style={{ flex:1, overflowY:'auto', padding:'16px', background:'#f9fafb' }}>
+               {savedCPs.length === 0 ? <div style={{ textAlign:'center', color:'#9ca3af', marginTop:'40px' }}><FolderOpen size={48} style={{ margin:'0 auto 12px', opacity:0.3 }}/><p>Пусто</p></div> : savedCPs.map((cp) => (
+                   <div key={cp.id} onClick={() => handleLoadCP(cp)} className="app-card" style={{ cursor:'pointer', marginBottom:'12px', active:{ transform:'scale(0.98)' } }}>
+                     <div className="flex-between" style={{ marginBottom:'8px', alignItems:'flex-start' }}><h4 className="text-bold" style={{ margin:0 }}>{cp.clientName}</h4><span className="text-xs text-bold text-blue" style={{ background:'#eff6ff', padding:'4px 8px', borderRadius:'99px' }}>{cp.total.toLocaleString()} ₽</span></div>
+                     <div className="flex-between" style={{ alignItems:'flex-end' }}><div className="text-xs text-gray" style={{ display:'flex', alignItems:'center', gap:'4px' }}><Clock size={12}/> {cp.date} • {cp.items.length} поз.</div><button onClick={(e) => handleDeleteCP(e, cp.id)} className="app-btn-icon" style={{ padding:'6px' }}><Trash2 size={16} /></button></div>
                    </div>
                  ))}
              </div>
@@ -500,8 +503,8 @@ export default function App() {
       )}
 
       {activeTab === 'editor' && (
-        <div className="fixed bottom-6 left-0 right-0 px-5 max-w-md mx-auto z-10 pointer-events-none">
-          <button onClick={() => setActiveTab('preview')} className="pointer-events-auto w-full bg-blue-600 text-white py-3.5 rounded-xl shadow-lg shadow-blue-500/30 font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform">
+        <div style={{ position:'fixed', bottom:'20px', left:0, right:0, padding:'0 20px', zIndex:10, maxWidth:'480px', margin:'0 auto', pointerEvents:'none' }}>
+          <button onClick={() => setActiveTab('preview')} className="app-btn app-btn-primary" style={{ boxShadow:'0 8px 20px rgba(37, 99, 235, 0.4)', pointerEvents:'auto' }}>
             <FileText size={20} />
             К просмотру ({total.toLocaleString()} ₽)
           </button>
