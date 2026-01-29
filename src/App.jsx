@@ -5,11 +5,11 @@ import {
   Sparkles, Percent, Wifi, RefreshCw, Loader2,
   Save, FolderOpen, RotateCcw, Clock, Download, Share, 
   Image as ImageIcon, Send, Share2, Camera, ChevronLeft, ChevronRight,
-  ScanLine, Aperture, Image as GalleryIcon // Иконки для камеры
+  ScanLine, Aperture, Image as GalleryIcon 
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "7.5 (Fast Scan)"; 
+const APP_VERSION = "7.7 (Full OCR)"; 
 const API_URL = ''; 
 const ITEMS_PER_PAGE = 6; 
 
@@ -53,7 +53,6 @@ const INTERNAL_STYLES = `
   
   #camera-input { display: none; }
   
-  /* Стили для оверлея камеры */
   .camera-overlay { position: fixed; inset: 0; z-index: 100; background: black; display: flex; flexDirection: column; }
   .camera-video { width: 100%; height: 100%; object-fit: cover; }
   .camera-controls { position: absolute; bottom: 0; left: 0; right: 0; padding: 30px; padding-bottom: calc(30px + env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: center; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); }
@@ -179,7 +178,6 @@ export default function App() {
       }
     } catch (e) {}
     
-    // Очистка потока камеры при размонтировании
     return () => stopCamera();
   }, []);
 
@@ -212,7 +210,7 @@ export default function App() {
   // --- ЛОГИКА КАМЕРЫ И OCR ---
 
   const startCamera = async () => {
-    if (!tesseractReady) { alert("Инициализация сканера..."); return; }
+    if (!tesseractReady) { alert("Инициализация сканера (загрузка языков)..."); return; }
     
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -220,15 +218,11 @@ export default function App() {
       });
       streamRef.current = stream;
       setShowCamera(true);
-      // Небольшая задержка, чтобы модалка успела открыться и ref появился
       setTimeout(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
+        if (videoRef.current) videoRef.current.srcObject = stream;
       }, 100);
     } catch (err) {
-      console.error("Camera access error:", err);
-      // Фолбэк на стандартный инпут, если камера недоступна
+      console.error("Camera error:", err);
       alert("Камера недоступна, открываем галерею.");
       cameraInputRef.current?.click();
     }
@@ -244,24 +238,18 @@ export default function App() {
 
   const takePhoto = () => {
     if (!videoRef.current) return;
-    
     const video = videoRef.current;
     const canvas = document.createElement('canvas');
     
-    // ОПТИМИЗАЦИЯ: Ограничиваем размер до 1000px для ускорения
     const MAX_W = 1000;
     const scale = video.videoWidth > MAX_W ? MAX_W / video.videoWidth : 1;
-    
     canvas.width = video.videoWidth * scale;
     canvas.height = video.videoHeight * scale;
     
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    
-    // Сначала закрываем камеру, чтобы разгрузить UI
     stopCamera();
 
-    // Конвертируем в Blob (сжатый JPEG 0.6) и отправляем на OCR
     canvas.toBlob(blob => {
       if (blob) processOcr(blob);
       else alert("Ошибка захвата кадра");
@@ -269,50 +257,103 @@ export default function App() {
   };
 
   const handleGalleryClick = () => {
-    // Открыть стандартный инпут из режима камеры
     cameraInputRef.current?.click();
     stopCamera();
   };
 
-  // Единая функция обработки (принимает File или Blob)
+  // МОЩНАЯ ФУНКЦИЯ РАСПОЗНАВАНИЯ
   const processOcr = async (imageFile) => {
     if (!imageFile) return;
 
     setIsProcessingOcr(true);
     try {
       const Tesseract = window.Tesseract;
-      const { data: { text } } = await Tesseract.recognize(imageFile, 'eng', {
-        logger: m => {} // Можно добавить логгер
+      // Используем rus+eng
+      const { data: { text } } = await Tesseract.recognize(imageFile, 'rus+eng', {
+        logger: m => {} 
       });
 
       console.log("Распознано:", text);
-      const digitsMatch = text.match(/\b\d{5,10}\b/);
       
-      if (digitsMatch) {
-        const foundSku = digitsMatch[0];
-        setSearchQuery(foundSku);
-        alert(`Найден артикул: ${foundSku}`);
-      } else {
-        const lines = text.split('\n').filter(line => line.trim().length > 3);
-        if (lines.length > 0) {
-             const possibleName = lines[0];
-             alert(`Артикул не найден. Добавлено: "${possibleName}"`);
-             setItems([...items, { sku: '', name: possibleName, price: 0, qty: 1, discount: 0, isAiGenerated: true }]);
-             setShowSearchModal(false);
-        } else {
-             alert("Текст не распознан. Попробуйте еще раз.");
-        }
+      // 1. ПОИСК ЦЕНЫ: ищем цифры (с пробелами) перед словом "руб" или "rub"
+      // Пример: "9 970 руб" -> находит "9 970"
+      const priceMatch = text.match(/(\d[\d\s]*[.,]?\d*)\s*(?:руб|rub|₽)/i);
+      let foundPrice = 0;
+      if (priceMatch) {
+        // Убираем пробелы, меняем запятые на точки
+        const rawPrice = priceMatch[1].replace(/\s/g, '').replace(',', '.');
+        foundPrice = parseFloat(rawPrice);
       }
+
+      // 2. ПОИСК АРТИКУЛА (как раньше)
+      const skuKeywordMatch = text.match(/(?:Артикул|Арт)[:.\s]*([A-Z0-9]+)/i);
+      const codeKeywordMatch = text.match(/(?:Код|Code)\s*(?:товара)?[:.\s]*(\d{5,10})/i);
+      const rawSkuMatch = text.match(/\b[A-Z]{2}\d{4}[A-Z]{2}\b/); 
+      const rawDigitsMatch = text.match(/\b\d{6,8}\b/); 
+
+      let foundSku = '';
+      if (skuKeywordMatch) foundSku = skuKeywordMatch[1];
+      else if (codeKeywordMatch) foundSku = codeKeywordMatch[1];
+      else if (rawSkuMatch) foundSku = rawSkuMatch[0];
+      else if (rawDigitsMatch) foundSku = rawDigitsMatch[0];
+
+      // 3. ПОИСК НАЗВАНИЯ (Эвристика)
+      // Разбиваем на строки, выкидываем мусор. То, что осталось вверху (и длинное) - скорее всего название.
+      const lines = text.split('\n');
+      const cleanLines = lines.filter(line => {
+         const l = line.trim().toLowerCase();
+         if (l.length < 3) return false;
+         // Фильтр мусорных слов с ценника
+         if (l.includes('aqua plaza')) return false;
+         if (l.includes('collection')) return false;
+         if (l.includes('артикул')) return false;
+         if (l.includes('код товара')) return false;
+         if (l.includes('ooo')) return false; 
+         if (l.includes('гармония')) return false;
+         if (/\d{2}\.\d{2}\.\d{4}/.test(l)) return false; // Дата
+         if (priceMatch && line.includes(priceMatch[0])) return false; // Строка с ценой
+         if (/^\d+$/.test(l)) return false; // Просто цифры
+         return true;
+      });
+
+      // Берем первые 2-3 строки из оставшихся, это обычно название
+      let foundName = cleanLines.slice(0, 3).join(' ').trim();
+      // Убираем лишние пробелы
+      foundName = foundName.replace(/\s+/g, ' ');
+
+      if (!foundName) foundName = foundSku ? `Товар ${foundSku}` : "Распознанный товар";
+
+      // ЛОГИКА ПРИНЯТИЯ РЕШЕНИЯ
+      if (foundPrice > 0 || foundSku || (foundName && foundName !== "Распознанный товар")) {
+         const confirmMsg = `Распознано:\n\n📦 ${foundName}\n💰 Цена: ${foundPrice.toLocaleString()} ₽\n🔖 Арт: ${foundSku || 'нет'}\n\nДобавить в список?`;
+         
+         if (window.confirm(confirmMsg)) {
+            setItems([...items, { 
+              sku: foundSku, 
+              name: foundName, 
+              price: foundPrice, 
+              qty: 1, 
+              discount: 0, 
+              isAiGenerated: true 
+            }]);
+            setShowSearchModal(false);
+         } else {
+            // Если отказался добавлять, но артикул есть - вставим в поиск
+            if (foundSku) setSearchQuery(foundSku);
+         }
+      } else {
+         alert("Не удалось уверенно распознать данные. Попробуйте еще раз.");
+      }
+
     } catch (err) {
       console.error(err);
-      alert("Ошибка распознавания.");
+      alert("Ошибка распознавания. Проверьте интернет.");
     } finally {
       setIsProcessingOcr(false);
       if (cameraInputRef.current) cameraInputRef.current.value = '';
     }
   };
 
-  // Обработчик для input type="file"
   const handleFileInputChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       processOcr(e.target.files[0]);
