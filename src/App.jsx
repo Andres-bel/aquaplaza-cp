@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "7.4 (Live Cam)"; 
+const APP_VERSION = "7.5 (Fast Scan)"; 
 const API_URL = ''; 
 const ITEMS_PER_PAGE = 6; 
 
@@ -245,17 +245,27 @@ export default function App() {
   const takePhoto = () => {
     if (!videoRef.current) return;
     
+    const video = videoRef.current;
     const canvas = document.createElement('canvas');
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(videoRef.current, 0, 0);
     
-    // Конвертируем в Blob и отправляем на OCR
+    // ОПТИМИЗАЦИЯ: Ограничиваем размер до 1000px для ускорения
+    const MAX_W = 1000;
+    const scale = video.videoWidth > MAX_W ? MAX_W / video.videoWidth : 1;
+    
+    canvas.width = video.videoWidth * scale;
+    canvas.height = video.videoHeight * scale;
+    
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    
+    // Сначала закрываем камеру, чтобы разгрузить UI
+    stopCamera();
+
+    // Конвертируем в Blob (сжатый JPEG 0.6) и отправляем на OCR
     canvas.toBlob(blob => {
-      processOcr(blob);
-      stopCamera(); // Закрываем камеру после снимка
-    }, 'image/jpeg', 0.8);
+      if (blob) processOcr(blob);
+      else alert("Ошибка захвата кадра");
+    }, 'image/jpeg', 0.6);
   };
 
   const handleGalleryClick = () => {
@@ -573,10 +583,10 @@ export default function App() {
                 <button 
                   onClick={startCamera}
                   className="app-btn-icon" 
-                  style={{ position:'absolute', right:'4px', top:'4px', bottom:'4px', height:'auto', color: isProcessingOcr ? '#2563eb' : '#6b7280' }}
+                  style={{ position:'absolute', right:'4px', top:'4px', bottom:'4px', height:'auto', width: isProcessingOcr ? 'auto' : '40px', padding: isProcessingOcr ? '0 12px' : '8px', color: isProcessingOcr ? '#2563eb' : '#6b7280' }}
                   disabled={isProcessingOcr}
                 >
-                  {isProcessingOcr ? <Loader2 size={20} className="animate-spin" /> : <ScanLine size={20} />}
+                  {isProcessingOcr ? <span style={{fontSize:'12px', display:'flex', alignItems:'center', gap:'4px'}}><Loader2 size={16} className="animate-spin" /> Жду...</span> : <ScanLine size={20} />}
                 </button>
              </div>
 
