@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "7.9 (Fast Load)"; 
+const APP_VERSION = "8.0 (CDN Fix)"; 
 const API_URL = ''; 
 const ITEMS_PER_PAGE = 6; 
 
@@ -60,16 +60,35 @@ const INTERNAL_STYLES = `
   .shutter-btn:active { transform: scale(0.9); }
 `;
 
-// Функция для ленивой загрузки скриптов
-const loadScript = (src, id) => {
+// Улучшенная функция загрузки с поддержкой зеркал (Fallback)
+const loadScript = (srcs, id) => {
   return new Promise((resolve, reject) => {
     if (document.getElementById(id)) return resolve();
-    const script = document.createElement('script');
-    script.id = id;
-    script.src = src;
-    script.onload = () => resolve();
-    script.onerror = (e) => reject(e);
-    document.head.appendChild(script);
+    
+    // Если передана одна строка, делаем массив
+    const sources = Array.isArray(srcs) ? srcs : [srcs];
+    
+    const tryLoad = (index) => {
+      if (index >= sources.length) {
+        return reject(new Error('Все источники скрипта недоступны'));
+      }
+
+      const script = document.createElement('script');
+      script.id = id;
+      script.src = sources[index];
+      script.async = true;
+      
+      script.onload = () => resolve();
+      script.onerror = () => {
+        console.warn(`Ошибка загрузки ${sources[index]}, пробую следующий...`);
+        script.remove(); // Удаляем битый тег
+        tryLoad(index + 1); // Пробуем следующий
+      };
+      
+      document.head.appendChild(script);
+    };
+
+    tryLoad(0);
   });
 };
 
@@ -198,15 +217,19 @@ export default function App() {
     return text;
   };
 
-  // --- ЛОГИКА ЗАГРУЗКИ СКРИПТОВ ---
+  // --- ЛОГИКА ЗАГРУЗКИ СКРИПТОВ С ЗАПАСНЫМИ ИСТОЧНИКАМИ ---
   
   const ensureTesseract = async () => {
     if (window.Tesseract) return;
     setIsModuleLoading(true);
     try {
-      await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js", "tesseract-script");
+      // Пробуем загрузить с разных CDN
+      await loadScript([
+        "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
+        "https://unpkg.com/tesseract.js@5.0.0/dist/tesseract.min.js"
+      ], "tesseract-script");
     } catch(e) {
-      alert("Не удалось загрузить сканер. Проверьте интернет.");
+      alert("Не удалось загрузить сканер. Проверьте подключение к интернету или VPN.");
       throw e;
     } finally {
       setIsModuleLoading(false);
@@ -217,9 +240,12 @@ export default function App() {
     if (window.html2canvas) return;
     setIsModuleLoading(true);
     try {
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js", "html2canvas-script");
+      await loadScript([
+        "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+        "https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"
+      ], "html2canvas-script");
     } catch(e) {
-      alert("Не удалось загрузить модуль скриншотов.");
+      alert("Не удалось загрузить модуль скриншотов. Проверьте интернет.");
       throw e;
     } finally {
       setIsModuleLoading(false);
@@ -359,7 +385,7 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      alert("Ошибка распознавания.");
+      alert("Ошибка распознавания. Проверьте интернет (возможно нужна VPN для загрузки модулей).");
     } finally {
       setIsProcessingOcr(false);
       if (cameraInputRef.current) cameraInputRef.current.value = '';
