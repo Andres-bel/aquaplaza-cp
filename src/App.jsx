@@ -8,29 +8,37 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "7.1"; 
+const APP_VERSION = "7.2 (iOS Fix)"; 
 const API_URL = ''; 
-const ITEMS_PER_PAGE = 6; // Количество товаров на странице
+const ITEMS_PER_PAGE = 6; 
 
 // --- ВСТРОЕННЫЕ СТИЛИ (CSS) ---
 const INTERNAL_STYLES = `
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f3f4f6; color: #1f2937; margin: 0; padding-bottom: 80px; -webkit-font-smoothing: antialiased; }
+  body { 
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+    background-color: #f3f4f6; 
+    color: #1f2937; 
+    margin: 0; 
+    padding-bottom: calc(80px + env(safe-area-inset-bottom)); /* Фикс для iPhone (полоска снизу) */
+    -webkit-font-smoothing: antialiased; 
+    -webkit-tap-highlight-color: transparent; /* Убирает серый фон при клике на iOS */
+  }
   .app-card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); margin-bottom: 12px; border: 1px solid #f3f4f6; }
   .app-card-sm { padding: 12px; }
-  
+   
   .app-input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #f9fafb; font-size: 14px; outline: none; transition: border-color 0.2s; color: #000000 !important; -webkit-text-fill-color: #000000 !important; }
   .app-input:focus { border-color: #3b82f6; background: white; }
   .app-input::placeholder { color: #9ca3af; -webkit-text-fill-color: #9ca3af; }
-  
+   
   .app-input-ghost { background: transparent; border: none; padding: 0; margin: 0; width: 100%; outline: none; color: #000000 !important; }
-  
+   
   .app-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border-radius: 12px; font-weight: 600; font-size: 14px; cursor: pointer; border: none; transition: all 0.2s; text-decoration: none; box-sizing: border-box; }
   .app-btn:active { transform: scale(0.98); }
   .app-btn-primary { background-color: #2563eb; color: white; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); }
   .app-btn-secondary { background-color: white; color: #374151; border: 1px solid #e5e7eb; }
   .app-btn-dashed { background-color: white; color: #2563eb; border: 1px dashed #93c5fd; }
   .app-btn-icon { padding: 8px; border-radius: 8px; color: #9ca3af; background: transparent; border: none; cursor: pointer; }
-  
+   
   .flex-between { display: flex; justify-content: space-between; align-items: center; }
   .text-sm { font-size: 14px; }
   .text-xs { font-size: 12px; }
@@ -38,30 +46,45 @@ const INTERNAL_STYLES = `
   .text-gray { color: #6b7280; }
   .text-blue { color: #2563eb; }
   .text-orange { color: #f97316; }
+
+  /* Анимации, если Tailwind не загрузился */
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
 `;
 
 const useExternalScripts = () => {
-  const [loaded, setLoaded] = useState(false);
+  const [screenshotReady, setScreenshotReady] = useState(false);
+  
   useEffect(() => {
+    // 1. Стили загружаем сразу
     const styleTag = document.createElement('style');
     styleTag.innerHTML = INTERNAL_STYLES;
     document.head.appendChild(styleTag);
+
+    // 2. Скрипт загружаем асинхронно, не блокируя UI
     if (!document.getElementById('html2canvas-script')) {
       const script = document.createElement('script');
       script.id = 'html2canvas-script';
       script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
-      script.onload = () => setLoaded(true);
+      script.onload = () => setScreenshotReady(true);
+      script.onerror = () => {
+        console.warn("Не удалось загрузить html2canvas. Скриншоты будут недоступны.");
+        setScreenshotReady(false); 
+      };
       document.head.appendChild(script);
-    } else { setLoaded(true); }
+    } else { 
+      setScreenshotReady(true); 
+    }
   }, []);
-  return loaded;
+
+  return screenshotReady;
 };
 
 const ProductRow = ({ item, onUpdate, onRemove, index }) => {
   const finalPrice = item.price * (1 - (item.discount || 0) / 100);
   const totalItemSum = finalPrice * item.qty;
   return (
-    <div className="app-card app-card-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="app-card app-card-sm animate-fade-in">
       <div className="flex-between" style={{ alignItems: 'flex-start', marginBottom: '8px' }}>
         <div style={{ flex: 1, marginRight: '8px' }}>
            {item.sku && (
@@ -87,7 +110,9 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
 };
 
 export default function App() {
-  const scriptsLoaded = useExternalScripts();
+  // Теперь мы не блокируем рендер, если скрипт скриншотов еще грузится
+  const screenshotReady = useExternalScripts();
+  
   const [activeTab, setActiveTab] = useState('editor');
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
@@ -96,10 +121,10 @@ export default function App() {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
-  
+   
   // Пагинация
   const [currentPage, setCurrentPage] = useState(0);
-  
+   
   const [clientName, setClientName] = useState('');
   const [managerName, setManagerName] = useState('Менеджер Aquaplaza');
   const [globalDiscount, setGlobalDiscount] = useState(0);
@@ -109,29 +134,39 @@ export default function App() {
   const receiptRef = useRef(null);
 
   useEffect(() => {
+    // Безопасная инициализация Telegram WebApp
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
-      tg.ready();
-      try { tg.expand(); } catch (e) {}
+      try { 
+        tg.ready(); 
+        tg.expand(); 
+        // Покрасим хедер в цвет приложения для iOS
+        if (tg.setHeaderColor) tg.setHeaderColor('#ffffff');
+      } catch (e) { console.log('TG Init Error:', e); }
+      
       if (tg.initDataUnsafe?.user?.first_name) setManagerName(`${tg.initDataUnsafe.user.first_name} (Aquaplaza)`);
     }
-    const loadedHistory = localStorage.getItem('aquaplaza_history');
-    if (loadedHistory) try { setSavedCPs(JSON.parse(loadedHistory)); } catch (e) {}
-    const draft = localStorage.getItem('aquaplaza_draft');
-    if (draft) {
-      try {
+
+    try {
+      const loadedHistory = localStorage.getItem('aquaplaza_history');
+      if (loadedHistory) setSavedCPs(JSON.parse(loadedHistory)); 
+    } catch (e) { console.log('LocalStorage Error:', e); }
+
+    try {
+      const draft = localStorage.getItem('aquaplaza_draft');
+      if (draft) {
         const d = JSON.parse(draft);
         if (d.items && d.items.length > 0) {
           setItems(d.items); setClientName(d.clientName || ''); setGlobalDiscount(d.globalDiscount || 0);
           if (d.managerName) setManagerName(d.managerName);
         }
-      } catch (e) {}
-    }
+      }
+    } catch (e) {}
   }, []);
 
   useEffect(() => {
     const draft = { items, clientName, globalDiscount, managerName };
-    localStorage.setItem('aquaplaza_draft', JSON.stringify(draft));
+    try { localStorage.setItem('aquaplaza_draft', JSON.stringify(draft)); } catch(e) {}
   }, [items, clientName, globalDiscount, managerName]);
 
   const generateCPText = () => {
@@ -156,25 +191,30 @@ export default function App() {
   };
 
   const handleShowImageForScreenshot = async () => {
-    if (!receiptRef.current || !window.html2canvas) { alert("Подготовка..."); return; }
-    
+    // Проверка, загружен ли скрипт
+    if (!screenshotReady || !window.html2canvas) { 
+      alert("Модуль скриншотов еще загружается или заблокирован сетью. Попробуйте через пару секунд."); 
+      return; 
+    }
+    if (!receiptRef.current) return;
+     
     setIsGeneratingImage(true);
-    
+     
     try {
       const canvas = await window.html2canvas(receiptRef.current, { 
         scale: 2, 
         backgroundColor: '#ffffff', 
-        useCORS: true 
+        useCORS: true,
+        logging: false
       });
-      
+       
       const dataUrl = canvas.toDataURL('image/png');
       setGeneratedImage(dataUrl);
       setShowImageModal(true);
-      setIsGeneratingImage(false);
-      
     } catch (error) {
       console.error(error);
-      alert("Ошибка при создании фото");
+      alert("Ошибка при создании фото. Попробуйте обновить страницу.");
+    } finally {
       setIsGeneratingImage(false);
     }
   };
@@ -186,7 +226,7 @@ export default function App() {
     const newCP = { id: Date.now(), date: new Date().toLocaleDateString(), time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}), clientName, managerName, items, globalDiscount, total: tot };
     const newHistory = [newCP, ...savedCPs];
     setSavedCPs(newHistory);
-    localStorage.setItem('aquaplaza_history', JSON.stringify(newHistory));
+    try { localStorage.setItem('aquaplaza_history', JSON.stringify(newHistory)); } catch(e){}
     if (window.Telegram?.WebApp?.HapticFeedback) window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
     alert('✅ Сохранено');
   };
@@ -204,7 +244,7 @@ export default function App() {
     if (window.confirm('Удалить?')) {
       const newHistory = savedCPs.filter(cp => cp.id !== id);
       setSavedCPs(newHistory);
-      localStorage.setItem('aquaplaza_history', JSON.stringify(newHistory));
+      try { localStorage.setItem('aquaplaza_history', JSON.stringify(newHistory)); } catch(e){}
     }
   };
 
@@ -261,8 +301,6 @@ export default function App() {
 
   const handleReload = () => window.location.reload();
 
-  if (!scriptsLoaded) return <div style={{height:'100vh', display:'flex', alignItems:'center', justifyContent:'center', color:'#2563eb'}}><Loader2 className="animate-spin" size={32}/></div>;
-
   // Формируем ссылку для кнопки Telegram
   const tgLink = `https://t.me/share/url?text=${encodeURIComponent(generateCPText())}`;
 
@@ -304,7 +342,7 @@ export default function App() {
           </div>
         ) : (
           /* PREVIEW */
-          <div className="animate-in fade-in zoom-in-95 duration-300" style={{ paddingBottom:'80px' }}>
+          <div className="animate-fade-in" style={{ paddingBottom:'80px' }}>
             {/* Карточка с крестиком закрытия */}
             <div style={{ position:'relative' }}>
                <button onClick={() => setActiveTab('editor')} className="app-btn-icon" style={{ position:'absolute', top:'-40px', right:'0', background:'#fff', boxShadow:'0 2px 8px rgba(0,0,0,0.1)' }}><X size={20}/></button>
@@ -318,7 +356,7 @@ export default function App() {
                       <div><div className="text-xs text-gray" style={{ textTransform:'uppercase', marginBottom:'4px' }}>Для кого</div><div className="text-bold">{clientName || 'Клиент'}</div></div>
                       <div style={{ textAlign:'right' }}><div className="text-xs text-gray" style={{ textTransform:'uppercase', marginBottom:'4px' }}>От кого</div><div className="text-bold">{managerName}</div></div>
                     </div>
-                    
+                     
                     {/* ТОВАРЫ (С ПАГИНАЦИЕЙ) */}
                     <div style={{ display:'flex', flexDirection:'column', gap:'16px', minHeight: '300px' }}>
                       {currentItems.map((item, i) => {
@@ -346,7 +384,7 @@ export default function App() {
                   </div>
                </div>
             </div>
-            
+             
             {/* КНОПКИ УПРАВЛЕНИЯ ПАГИНАЦИЕЙ */}
             {totalPages > 1 && (
               <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '16px' }}>
@@ -368,7 +406,7 @@ export default function App() {
                 </button>
               </div>
             )}
-            
+             
             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
               {/* ГЛАВНАЯ КНОПКА - Show Modal */}
               <button onClick={handleShowImageForScreenshot} className="app-btn app-btn-primary" style={{ fontSize:'16px' }} disabled={isGeneratingImage}>
@@ -431,9 +469,9 @@ export default function App() {
           <div style={{ position:'absolute', top:'20px', right:'20px', zIndex:70 }}>
              <button onClick={() => setShowImageModal(false)} className="app-btn-icon" style={{ color:'white', background:'rgba(255,255,255,0.2)' }}><X size={24}/></button>
           </div>
-          
+           
           <img src={generatedImage} alt="КП" style={{ maxWidth:'90%', maxHeight:'80vh', borderRadius:'8px', boxShadow:'0 10px 40px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()} />
-          
+           
           <div style={{ marginTop:'20px', color:'white', textAlign:'center', opacity:0.8 }}>
              <div style={{ fontSize:'16px', fontWeight:'bold', marginBottom:'4px' }}>Готово!</div>
              <div style={{ fontSize:'12px' }}>Сделайте скриншот экрана сейчас</div>
@@ -442,7 +480,7 @@ export default function App() {
       )}
 
       {activeTab === 'editor' && (
-        <div style={{ position:'fixed', bottom:'20px', left:0, right:0, padding:'0 20px', zIndex:10, maxWidth:'480px', margin:'0 auto', pointerEvents:'none' }}>
+        <div style={{ position:'fixed', bottom:0, left:0, right:0, padding:'0 20px', paddingBottom: 'calc(20px + env(safe-area-inset-bottom))', zIndex:10, maxWidth:'480px', margin:'0 auto', pointerEvents:'none' }}>
           <button onClick={() => setActiveTab('preview')} className="app-btn app-btn-primary" style={{ boxShadow:'0 8px 20px rgba(37, 99, 235, 0.4)', pointerEvents:'auto' }}>
             <FileText size={20} />
             К просмотру ({total.toLocaleString()} ₽)
