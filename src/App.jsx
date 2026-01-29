@@ -4,11 +4,12 @@ import {
   User, Briefcase, Search, ArrowRight, Package, X,
   Sparkles, Percent, Wifi, RefreshCw, Loader2,
   Save, FolderOpen, RotateCcw, Clock, Download, Share, 
-  Image as ImageIcon, Send, Share2, Camera, ChevronLeft, ChevronRight
+  Image as ImageIcon, Send, Share2, Camera, ChevronLeft, ChevronRight,
+  ScanLine // Добавлена иконка сканирования
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "7.2 (iOS Fix)"; 
+const APP_VERSION = "7.3 (Scan Beta)"; 
 const API_URL = ''; 
 const ITEMS_PER_PAGE = 6; 
 
@@ -50,10 +51,14 @@ const INTERNAL_STYLES = `
   /* Анимации, если Tailwind не загрузился */
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+  
+  /* Скрытый инпут для камеры */
+  #camera-input { display: none; }
 `;
 
 const useExternalScripts = () => {
   const [screenshotReady, setScreenshotReady] = useState(false);
+  const [tesseractReady, setTesseractReady] = useState(false);
   
   useEffect(() => {
     // 1. Стили загружаем сразу
@@ -61,23 +66,28 @@ const useExternalScripts = () => {
     styleTag.innerHTML = INTERNAL_STYLES;
     document.head.appendChild(styleTag);
 
-    // 2. Скрипт загружаем асинхронно, не блокируя UI
+    // 2. Скрипт html2canvas (скриншоты)
     if (!document.getElementById('html2canvas-script')) {
       const script = document.createElement('script');
       script.id = 'html2canvas-script';
       script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
       script.onload = () => setScreenshotReady(true);
-      script.onerror = () => {
-        console.warn("Не удалось загрузить html2canvas. Скриншоты будут недоступны.");
-        setScreenshotReady(false); 
-      };
       document.head.appendChild(script);
-    } else { 
-      setScreenshotReady(true); 
-    }
+    } else { setScreenshotReady(true); }
+
+    // 3. Скрипт Tesseract (OCR) - загружаем версию 4 или 5
+    if (!document.getElementById('tesseract-script')) {
+      const script = document.createElement('script');
+      script.id = 'tesseract-script';
+      script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js";
+      script.onload = () => setTesseractReady(true);
+      script.onerror = () => console.warn("Tesseract не загрузился");
+      document.head.appendChild(script);
+    } else { setTesseractReady(true); }
+
   }, []);
 
-  return screenshotReady;
+  return { screenshotReady, tesseractReady };
 };
 
 const ProductRow = ({ item, onUpdate, onRemove, index }) => {
@@ -110,8 +120,7 @@ const ProductRow = ({ item, onUpdate, onRemove, index }) => {
 };
 
 export default function App() {
-  // Теперь мы не блокируем рендер, если скрипт скриншотов еще грузится
-  const screenshotReady = useExternalScripts();
+  const { screenshotReady, tesseractReady } = useExternalScripts();
   
   const [activeTab, setActiveTab] = useState('editor');
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -119,6 +128,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isScanning, setIsScanning] = useState(false); // Состояние сканирования
   const [showImageModal, setShowImageModal] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
    
@@ -132,6 +142,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [savedCPs, setSavedCPs] = useState([]);
   const receiptRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   useEffect(() => {
     // Безопасная инициализация Telegram WebApp
@@ -140,7 +151,6 @@ export default function App() {
       try { 
         tg.ready(); 
         tg.expand(); 
-        // Покрасим хедер в цвет приложения для iOS
         if (tg.setHeaderColor) tg.setHeaderColor('#ffffff');
       } catch (e) { console.log('TG Init Error:', e); }
       
@@ -191,7 +201,6 @@ export default function App() {
   };
 
   const handleShowImageForScreenshot = async () => {
-    // Проверка, загружен ли скрипт
     if (!screenshotReady || !window.html2canvas) { 
       alert("Модуль скриншотов еще загружается или заблокирован сетью. Попробуйте через пару секунд."); 
       return; 
@@ -202,12 +211,8 @@ export default function App() {
      
     try {
       const canvas = await window.html2canvas(receiptRef.current, { 
-        scale: 2, 
-        backgroundColor: '#ffffff', 
-        useCORS: true,
-        logging: false
+        scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false
       });
-       
       const dataUrl = canvas.toDataURL('image/png');
       setGeneratedImage(dataUrl);
       setShowImageModal(true);
@@ -278,6 +283,60 @@ export default function App() {
     finally { setIsSearching(false); }
   };
 
+  // --- ЛОГИКА СКАНИРОВАНИЯ ЦЕННИКА ---
+  const handleScanClick = () => {
+    if (!tesseractReady) { alert("Модуль сканирования еще загружается..."); return; }
+    cameraInputRef.current?.click();
+  };
+
+  const processScannedImage = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setIsScanning(true);
+    try {
+      const Tesseract = window.Tesseract;
+      // Распознаем текст (eng+rus)
+      const { data: { text } } = await Tesseract.recognize(file, 'eng', {
+        logger: m => console.log(m) // Логирование прогресса
+      });
+
+      console.log("Распознано:", text);
+
+      // Простейшая эвристика: ищем числа из 4-10 цифр (похожие на артикул)
+      const digitsMatch = text.match(/\b\d{5,10}\b/);
+      
+      if (digitsMatch) {
+        const foundSku = digitsMatch[0];
+        setSearchQuery(foundSku);
+        if (window.confirm(`Найден артикул: ${foundSku}. Искать?`)) {
+             // Сразу запускаем поиск, но нам нужно обновить стейт. 
+             // Лучше просто вставить в поле, user сам нажмет Enter или мы вызовем эффект
+             // Для простоты - вставляем в поле
+        }
+      } else {
+        // Если артикул не найден, берем первую непустую строку как название
+        const lines = text.split('\n').filter(line => line.trim().length > 3);
+        if (lines.length > 0) {
+             const possibleName = lines[0];
+             alert(`Артикул не найден. Добавляю как товар: "${possibleName}"`);
+             setItems([...items, { sku: '', name: possibleName, price: 0, qty: 1, discount: 0, isAiGenerated: true }]);
+             setShowSearchModal(false);
+        } else {
+             alert("Не удалось распознать текст. Попробуйте еще раз.");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Ошибка сканирования.");
+    } finally {
+      setIsScanning(false);
+      // Сбрасываем инпут, чтобы можно было выбрать тот же файл
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+    }
+  };
+  // ------------------------------------
+
   const handleManualAdd = () => { setItems([...items, { sku: '', name: '', price: 0, qty: 1, discount: 0 }]); setShowSearchModal(false); };
   const updateItem = (index, field, value) => { const newItems = [...items]; newItems[index][field] = value; setItems(newItems); };
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
@@ -300,16 +359,22 @@ export default function App() {
   };
 
   const handleReload = () => window.location.reload();
-
-  // Формируем ссылку для кнопки Telegram
   const tgLink = `https://t.me/share/url?text=${encodeURIComponent(generateCPText())}`;
-
-  // Пагинация товаров
   const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
   const currentItems = items.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE);
 
   return (
     <div className="min-h-screen">
+      {/* Скрытый инпут для камеры */}
+      <input 
+        type="file" 
+        accept="image/*" 
+        capture="environment" 
+        id="camera-input" 
+        ref={cameraInputRef} 
+        onChange={processScannedImage} 
+      />
+
       {/* HEADER */}
       <div style={{ background:'rgba(255,255,255,0.9)', backdropFilter:'blur(10px)', padding:'16px', paddingBottom:'12px', borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:20 }}>
         <div className="flex-between" style={{ maxWidth:'480px', margin:'0 auto' }}>
@@ -343,7 +408,6 @@ export default function App() {
         ) : (
           /* PREVIEW */
           <div className="animate-fade-in" style={{ paddingBottom:'80px' }}>
-            {/* Карточка с крестиком закрытия */}
             <div style={{ position:'relative' }}>
                <button onClick={() => setActiveTab('editor')} className="app-btn-icon" style={{ position:'absolute', top:'-40px', right:'0', background:'#fff', boxShadow:'0 2px 8px rgba(0,0,0,0.1)' }}><X size={20}/></button>
                <div ref={receiptRef} className="app-card" style={{ padding:'0', overflow:'hidden', border:'1px solid #e5e7eb', minHeight:'400px' }}>
@@ -373,7 +437,6 @@ export default function App() {
                     </div>
 
                     <div style={{ marginTop:'20px', paddingTop:'16px', borderTop:'1px solid #f9fafb', textAlign:'center', display:'flex', flexDirection:'column', gap:'8px' }}>
-                       {/* Пагинация - точки и текст */}
                        {totalPages > 1 && (
                          <div style={{ display:'flex', justifyContent:'center', alignItems:'center', gap:'8px' }}>
                             <div className="text-xs text-gray">Стр. {currentPage + 1} из {totalPages}</div>
@@ -408,7 +471,6 @@ export default function App() {
             )}
              
             <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-              {/* ГЛАВНАЯ КНОПКА - Show Modal */}
               <button onClick={handleShowImageForScreenshot} className="app-btn app-btn-primary" style={{ fontSize:'16px' }} disabled={isGeneratingImage}>
                 {isGeneratingImage ? <Loader2 size={20} className="animate-spin" /> : <Camera size={20} />}
                 {isGeneratingImage ? 'Создаю...' : `📸 Скриншот (Стр. ${currentPage + 1})`}
@@ -434,16 +496,30 @@ export default function App() {
                 <h3 className="text-bold" style={{ fontSize:'18px' }}>Добавить товар</h3>
                 <button onClick={() => setShowSearchModal(false)} className="app-btn-icon" style={{ background:'#f3f4f6' }}><X size={20} /></button>
              </div>
+             
+             {/* ПОИСК И СКАНИРОВАНИЕ */}
              <div style={{ position:'relative', marginBottom:'12px' }}>
                 <Search size={18} style={{ position:'absolute', left:'12px', top:'14px', color:'#9ca3af' }} />
-                <input autoFocus type="text" placeholder="Введите артикул" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="app-input" style={{ paddingLeft:'40px', fontSize:'16px', padding:'12px 12px 12px 40px' }} />
+                <input autoFocus type="text" placeholder="Введите артикул" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="app-input" style={{ paddingLeft:'40px', paddingRight:'50px', fontSize:'16px', padding:'12px 12px 12px 40px' }} />
+                
+                {/* Кнопка сканирования внутри инпута */}
+                <button 
+                  onClick={handleScanClick}
+                  className="app-btn-icon" 
+                  style={{ position:'absolute', right:'4px', top:'4px', bottom:'4px', height:'auto', color: isScanning ? '#2563eb' : '#6b7280' }}
+                  disabled={isScanning}
+                >
+                  {isScanning ? <Loader2 size={20} className="animate-spin" /> : <ScanLine size={20} />}
+                </button>
              </div>
+
              <button onClick={handleSearch} disabled={isSearching || !searchQuery} className="app-btn app-btn-primary" style={{ marginBottom:'12px', opacity: (isSearching || !searchQuery) ? 0.5 : 1 }}>{isSearching ? 'Поиск...' : 'Найти'}</button>
              <button onClick={handleManualAdd} className="app-btn" style={{ background:'transparent', color:'#6b7280' }}>Ввести вручную</button>
           </div>
         </div>
       )}
 
+      {/* Остальные модальные окна (история, картинка) без изменений */}
       {showHistoryModal && (
         <div style={{ position:'fixed', inset:0, zIndex:50, display:'flex', alignItems:'flex-end', justifyContent:'center', background:'rgba(0,0,0,0.3)', backdropFilter:'blur(2px)' }}>
           <div className="animate-in slide-in-from-bottom-10" style={{ background:'white', width:'100%', maxWidth:'480px', borderRadius:'20px 20px 0 0', height:'80vh', display:'flex', flexDirection:'column', boxShadow:'0 -4px 20px rgba(0,0,0,0.1)' }}>
@@ -463,7 +539,6 @@ export default function App() {
         </div>
       )}
 
-      {/* --- МОДАЛЬНОЕ ОКНО ДЛЯ СКРИНШОТА --- */}
       {showImageModal && generatedImage && (
         <div style={{ position:'fixed', inset:0, zIndex:60, background:'rgba(0,0,0,0.9)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }} onClick={() => setShowImageModal(false)}>
           <div style={{ position:'absolute', top:'20px', right:'20px', zIndex:70 }}>
