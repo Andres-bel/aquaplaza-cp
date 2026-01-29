@@ -5,11 +5,11 @@ import {
   Sparkles, Percent, Wifi, RefreshCw, Loader2,
   Save, FolderOpen, RotateCcw, Clock, Download, Share, 
   Image as ImageIcon, Send, Share2, Camera, ChevronLeft, ChevronRight,
-  ScanLine, Aperture, Image as GalleryIcon 
+  Scan // Заменил ScanLine на Scan для совместимости
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "7.7 (Full OCR)"; 
+const APP_VERSION = "7.8 (Stable)"; 
 const API_URL = ''; 
 const ITEMS_PER_PAGE = 6; 
 
@@ -53,7 +53,8 @@ const INTERNAL_STYLES = `
   
   #camera-input { display: none; }
   
-  .camera-overlay { position: fixed; inset: 0; z-index: 100; background: black; display: flex; flexDirection: column; }
+  /* Исправлен CSS для оверлея (было flexDirection вместо flex-direction) */
+  .camera-overlay { position: fixed; inset: 0; z-index: 100; background: black; display: flex; flex-direction: column; }
   .camera-video { width: 100%; height: 100%; object-fit: cover; }
   .camera-controls { position: absolute; bottom: 0; left: 0; right: 0; padding: 30px; padding-bottom: calc(30px + env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: center; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); }
   .shutter-btn { width: 70px; height: 70px; border-radius: 50%; background: white; border: 4px solid rgba(255,255,255,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.1s; }
@@ -65,27 +66,31 @@ const useExternalScripts = () => {
   const [tesseractReady, setTesseractReady] = useState(false);
   
   useEffect(() => {
-    const styleTag = document.createElement('style');
-    styleTag.innerHTML = INTERNAL_STYLES;
-    document.head.appendChild(styleTag);
+    try {
+      const styleTag = document.createElement('style');
+      styleTag.innerHTML = INTERNAL_STYLES;
+      document.head.appendChild(styleTag);
 
-    if (!document.getElementById('html2canvas-script')) {
-      const script = document.createElement('script');
-      script.id = 'html2canvas-script';
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
-      script.onload = () => setScreenshotReady(true);
-      document.head.appendChild(script);
-    } else { setScreenshotReady(true); }
+      if (!document.getElementById('html2canvas-script')) {
+        const script = document.createElement('script');
+        script.id = 'html2canvas-script';
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+        script.onload = () => setScreenshotReady(true);
+        script.onerror = () => console.warn("Ошибка загрузки html2canvas");
+        document.head.appendChild(script);
+      } else { setScreenshotReady(true); }
 
-    if (!document.getElementById('tesseract-script')) {
-      const script = document.createElement('script');
-      script.id = 'tesseract-script';
-      script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js";
-      script.onload = () => setTesseractReady(true);
-      script.onerror = () => console.warn("Tesseract не загрузился");
-      document.head.appendChild(script);
-    } else { setTesseractReady(true); }
-
+      if (!document.getElementById('tesseract-script')) {
+        const script = document.createElement('script');
+        script.id = 'tesseract-script';
+        script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js";
+        script.onload = () => setTesseractReady(true);
+        script.onerror = () => console.warn("Tesseract не загрузился");
+        document.head.appendChild(script);
+      } else { setTesseractReady(true); }
+    } catch (e) {
+      console.error("Ошибка инициализации скриптов", e);
+    }
   }, []);
 
   return { screenshotReady, tesseractReady };
@@ -276,16 +281,14 @@ export default function App() {
       console.log("Распознано:", text);
       
       // 1. ПОИСК ЦЕНЫ: ищем цифры (с пробелами) перед словом "руб" или "rub"
-      // Пример: "9 970 руб" -> находит "9 970"
       const priceMatch = text.match(/(\d[\d\s]*[.,]?\d*)\s*(?:руб|rub|₽)/i);
       let foundPrice = 0;
       if (priceMatch) {
-        // Убираем пробелы, меняем запятые на точки
         const rawPrice = priceMatch[1].replace(/\s/g, '').replace(',', '.');
         foundPrice = parseFloat(rawPrice);
       }
 
-      // 2. ПОИСК АРТИКУЛА (как раньше)
+      // 2. ПОИСК АРТИКУЛА
       const skuKeywordMatch = text.match(/(?:Артикул|Арт)[:.\s]*([A-Z0-9]+)/i);
       const codeKeywordMatch = text.match(/(?:Код|Code)\s*(?:товара)?[:.\s]*(\d{5,10})/i);
       const rawSkuMatch = text.match(/\b[A-Z]{2}\d{4}[A-Z]{2}\b/); 
@@ -298,27 +301,23 @@ export default function App() {
       else if (rawDigitsMatch) foundSku = rawDigitsMatch[0];
 
       // 3. ПОИСК НАЗВАНИЯ (Эвристика)
-      // Разбиваем на строки, выкидываем мусор. То, что осталось вверху (и длинное) - скорее всего название.
       const lines = text.split('\n');
       const cleanLines = lines.filter(line => {
          const l = line.trim().toLowerCase();
          if (l.length < 3) return false;
-         // Фильтр мусорных слов с ценника
          if (l.includes('aqua plaza')) return false;
          if (l.includes('collection')) return false;
          if (l.includes('артикул')) return false;
          if (l.includes('код товара')) return false;
          if (l.includes('ooo')) return false; 
          if (l.includes('гармония')) return false;
-         if (/\d{2}\.\d{2}\.\d{4}/.test(l)) return false; // Дата
-         if (priceMatch && line.includes(priceMatch[0])) return false; // Строка с ценой
-         if (/^\d+$/.test(l)) return false; // Просто цифры
+         if (/\d{2}\.\d{2}\.\d{4}/.test(l)) return false; 
+         if (priceMatch && line.includes(priceMatch[0])) return false;
+         if (/^\d+$/.test(l)) return false; 
          return true;
       });
 
-      // Берем первые 2-3 строки из оставшихся, это обычно название
       let foundName = cleanLines.slice(0, 3).join(' ').trim();
-      // Убираем лишние пробелы
       foundName = foundName.replace(/\s+/g, ' ');
 
       if (!foundName) foundName = foundSku ? `Товар ${foundSku}` : "Распознанный товар";
@@ -338,7 +337,6 @@ export default function App() {
             }]);
             setShowSearchModal(false);
          } else {
-            // Если отказался добавлять, но артикул есть - вставим в поиск
             if (foundSku) setSearchQuery(foundSku);
          }
       } else {
@@ -482,7 +480,7 @@ export default function App() {
 
           <div className="camera-controls">
             <button onClick={handleGalleryClick} style={{ background:'transparent', border:'none', cursor:'pointer', color:'white', display:'flex', flexDirection:'column', alignItems:'center', gap:'4px' }}>
-               <GalleryIcon size={28} />
+               <ImageIcon size={28} />
                <span style={{fontSize:'10px'}}>Галерея</span>
             </button>
             
@@ -627,7 +625,7 @@ export default function App() {
                   style={{ position:'absolute', right:'4px', top:'4px', bottom:'4px', height:'auto', width: isProcessingOcr ? 'auto' : '40px', padding: isProcessingOcr ? '0 12px' : '8px', color: isProcessingOcr ? '#2563eb' : '#6b7280' }}
                   disabled={isProcessingOcr}
                 >
-                  {isProcessingOcr ? <span style={{fontSize:'12px', display:'flex', alignItems:'center', gap:'4px'}}><Loader2 size={16} className="animate-spin" /> Жду...</span> : <ScanLine size={20} />}
+                  {isProcessingOcr ? <span style={{fontSize:'12px', display:'flex', alignItems:'center', gap:'4px'}}><Loader2 size={16} className="animate-spin" /> Жду...</span> : <Scan size={20} />}
                 </button>
              </div>
 
