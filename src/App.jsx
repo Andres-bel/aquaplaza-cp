@@ -5,11 +5,11 @@ import {
   Sparkles, Percent, Wifi, RefreshCw, Loader2,
   Save, FolderOpen, RotateCcw, Clock, Download, Share, 
   Image as ImageIcon, Send, Share2, Camera, ChevronLeft, ChevronRight,
-  ScanLine // Добавлена иконка сканирования
+  ScanLine, Aperture, Image as GalleryIcon // Иконки для камеры
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "7.3 (Scan Beta)"; 
+const APP_VERSION = "7.4 (Live Cam)"; 
 const API_URL = ''; 
 const ITEMS_PER_PAGE = 6; 
 
@@ -20,9 +20,9 @@ const INTERNAL_STYLES = `
     background-color: #f3f4f6; 
     color: #1f2937; 
     margin: 0; 
-    padding-bottom: calc(80px + env(safe-area-inset-bottom)); /* Фикс для iPhone (полоска снизу) */
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
     -webkit-font-smoothing: antialiased; 
-    -webkit-tap-highlight-color: transparent; /* Убирает серый фон при клике на iOS */
+    -webkit-tap-highlight-color: transparent;
   }
   .app-card { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03); margin-bottom: 12px; border: 1px solid #f3f4f6; }
   .app-card-sm { padding: 12px; }
@@ -48,12 +48,17 @@ const INTERNAL_STYLES = `
   .text-blue { color: #2563eb; }
   .text-orange { color: #f97316; }
 
-  /* Анимации, если Tailwind не загрузился */
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
   
-  /* Скрытый инпут для камеры */
   #camera-input { display: none; }
+  
+  /* Стили для оверлея камеры */
+  .camera-overlay { position: fixed; inset: 0; z-index: 100; background: black; display: flex; flexDirection: column; }
+  .camera-video { width: 100%; height: 100%; object-fit: cover; }
+  .camera-controls { position: absolute; bottom: 0; left: 0; right: 0; padding: 30px; padding-bottom: calc(30px + env(safe-area-inset-bottom)); display: flex; justify-content: space-between; align-items: center; background: linear-gradient(to top, rgba(0,0,0,0.8), transparent); }
+  .shutter-btn { width: 70px; height: 70px; border-radius: 50%; background: white; border: 4px solid rgba(255,255,255,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.1s; }
+  .shutter-btn:active { transform: scale(0.9); }
 `;
 
 const useExternalScripts = () => {
@@ -61,12 +66,10 @@ const useExternalScripts = () => {
   const [tesseractReady, setTesseractReady] = useState(false);
   
   useEffect(() => {
-    // 1. Стили загружаем сразу
     const styleTag = document.createElement('style');
     styleTag.innerHTML = INTERNAL_STYLES;
     document.head.appendChild(styleTag);
 
-    // 2. Скрипт html2canvas (скриншоты)
     if (!document.getElementById('html2canvas-script')) {
       const script = document.createElement('script');
       script.id = 'html2canvas-script';
@@ -75,7 +78,6 @@ const useExternalScripts = () => {
       document.head.appendChild(script);
     } else { setScreenshotReady(true); }
 
-    // 3. Скрипт Tesseract (OCR) - загружаем версию 4 или 5
     if (!document.getElementById('tesseract-script')) {
       const script = document.createElement('script');
       script.id = 'tesseract-script';
@@ -128,11 +130,14 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [isScanning, setIsScanning] = useState(false); // Состояние сканирования
+  
+  // Состояния камеры
+  const [showCamera, setShowCamera] = useState(false);
+  const [isProcessingOcr, setIsProcessingOcr] = useState(false);
+  
   const [showImageModal, setShowImageModal] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
    
-  // Пагинация
   const [currentPage, setCurrentPage] = useState(0);
    
   const [clientName, setClientName] = useState('');
@@ -141,11 +146,13 @@ export default function App() {
   const [items, setItems] = useState([{ sku: '32843000', name: 'Смеситель для кухни Grohe (Пример)', price: 12400, qty: 1, discount: 0, isAiGenerated: true }]);
   const [copied, setCopied] = useState(false);
   const [savedCPs, setSavedCPs] = useState([]);
+  
   const receiptRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
 
   useEffect(() => {
-    // Безопасная инициализация Telegram WebApp
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
       try { 
@@ -153,7 +160,6 @@ export default function App() {
         tg.expand(); 
         if (tg.setHeaderColor) tg.setHeaderColor('#ffffff');
       } catch (e) { console.log('TG Init Error:', e); }
-      
       if (tg.initDataUnsafe?.user?.first_name) setManagerName(`${tg.initDataUnsafe.user.first_name} (Aquaplaza)`);
     }
 
@@ -172,6 +178,9 @@ export default function App() {
         }
       }
     } catch (e) {}
+    
+    // Очистка потока камеры при размонтировании
+    return () => stopCamera();
   }, []);
 
   useEffect(() => {
@@ -200,28 +209,117 @@ export default function App() {
     return text;
   };
 
-  const handleShowImageForScreenshot = async () => {
-    if (!screenshotReady || !window.html2canvas) { 
-      alert("Модуль скриншотов еще загружается или заблокирован сетью. Попробуйте через пару секунд."); 
-      return; 
-    }
-    if (!receiptRef.current) return;
-     
-    setIsGeneratingImage(true);
-     
+  // --- ЛОГИКА КАМЕРЫ И OCR ---
+
+  const startCamera = async () => {
+    if (!tesseractReady) { alert("Инициализация сканера..."); return; }
+    
     try {
-      const canvas = await window.html2canvas(receiptRef.current, { 
-        scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } 
       });
-      const dataUrl = canvas.toDataURL('image/png');
-      setGeneratedImage(dataUrl);
-      setShowImageModal(true);
-    } catch (error) {
-      console.error(error);
-      alert("Ошибка при создании фото. Попробуйте обновить страницу.");
-    } finally {
-      setIsGeneratingImage(false);
+      streamRef.current = stream;
+      setShowCamera(true);
+      // Небольшая задержка, чтобы модалка успела открыться и ref появился
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch (err) {
+      console.error("Camera access error:", err);
+      // Фолбэк на стандартный инпут, если камера недоступна
+      alert("Камера недоступна, открываем галерею.");
+      cameraInputRef.current?.click();
     }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setShowCamera(false);
+  };
+
+  const takePhoto = () => {
+    if (!videoRef.current) return;
+    
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoRef.current, 0, 0);
+    
+    // Конвертируем в Blob и отправляем на OCR
+    canvas.toBlob(blob => {
+      processOcr(blob);
+      stopCamera(); // Закрываем камеру после снимка
+    }, 'image/jpeg', 0.8);
+  };
+
+  const handleGalleryClick = () => {
+    // Открыть стандартный инпут из режима камеры
+    cameraInputRef.current?.click();
+    stopCamera();
+  };
+
+  // Единая функция обработки (принимает File или Blob)
+  const processOcr = async (imageFile) => {
+    if (!imageFile) return;
+
+    setIsProcessingOcr(true);
+    try {
+      const Tesseract = window.Tesseract;
+      const { data: { text } } = await Tesseract.recognize(imageFile, 'eng', {
+        logger: m => {} // Можно добавить логгер
+      });
+
+      console.log("Распознано:", text);
+      const digitsMatch = text.match(/\b\d{5,10}\b/);
+      
+      if (digitsMatch) {
+        const foundSku = digitsMatch[0];
+        setSearchQuery(foundSku);
+        alert(`Найден артикул: ${foundSku}`);
+      } else {
+        const lines = text.split('\n').filter(line => line.trim().length > 3);
+        if (lines.length > 0) {
+             const possibleName = lines[0];
+             alert(`Артикул не найден. Добавлено: "${possibleName}"`);
+             setItems([...items, { sku: '', name: possibleName, price: 0, qty: 1, discount: 0, isAiGenerated: true }]);
+             setShowSearchModal(false);
+        } else {
+             alert("Текст не распознан. Попробуйте еще раз.");
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Ошибка распознавания.");
+    } finally {
+      setIsProcessingOcr(false);
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+    }
+  };
+
+  // Обработчик для input type="file"
+  const handleFileInputChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      processOcr(e.target.files[0]);
+    }
+  };
+
+  // --- ОСТАЛЬНЫЕ ФУНКЦИИ ---
+  
+  const handleShowImageForScreenshot = async () => {
+    if (!screenshotReady || !window.html2canvas) { alert("Загрузка модуля..."); return; }
+    if (!receiptRef.current) return;
+    setIsGeneratingImage(true);
+    try {
+      const canvas = await window.html2canvas(receiptRef.current, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+      setGeneratedImage(canvas.toDataURL('image/png'));
+      setShowImageModal(true);
+    } catch (error) { alert("Ошибка фото."); } finally { setIsGeneratingImage(false); }
   };
 
   const handleSaveToHistory = () => {
@@ -283,60 +381,6 @@ export default function App() {
     finally { setIsSearching(false); }
   };
 
-  // --- ЛОГИКА СКАНИРОВАНИЯ ЦЕННИКА ---
-  const handleScanClick = () => {
-    if (!tesseractReady) { alert("Модуль сканирования еще загружается..."); return; }
-    cameraInputRef.current?.click();
-  };
-
-  const processScannedImage = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setIsScanning(true);
-    try {
-      const Tesseract = window.Tesseract;
-      // Распознаем текст (eng+rus)
-      const { data: { text } } = await Tesseract.recognize(file, 'eng', {
-        logger: m => console.log(m) // Логирование прогресса
-      });
-
-      console.log("Распознано:", text);
-
-      // Простейшая эвристика: ищем числа из 4-10 цифр (похожие на артикул)
-      const digitsMatch = text.match(/\b\d{5,10}\b/);
-      
-      if (digitsMatch) {
-        const foundSku = digitsMatch[0];
-        setSearchQuery(foundSku);
-        if (window.confirm(`Найден артикул: ${foundSku}. Искать?`)) {
-             // Сразу запускаем поиск, но нам нужно обновить стейт. 
-             // Лучше просто вставить в поле, user сам нажмет Enter или мы вызовем эффект
-             // Для простоты - вставляем в поле
-        }
-      } else {
-        // Если артикул не найден, берем первую непустую строку как название
-        const lines = text.split('\n').filter(line => line.trim().length > 3);
-        if (lines.length > 0) {
-             const possibleName = lines[0];
-             alert(`Артикул не найден. Добавляю как товар: "${possibleName}"`);
-             setItems([...items, { sku: '', name: possibleName, price: 0, qty: 1, discount: 0, isAiGenerated: true }]);
-             setShowSearchModal(false);
-        } else {
-             alert("Не удалось распознать текст. Попробуйте еще раз.");
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Ошибка сканирования.");
-    } finally {
-      setIsScanning(false);
-      // Сбрасываем инпут, чтобы можно было выбрать тот же файл
-      if (cameraInputRef.current) cameraInputRef.current.value = '';
-    }
-  };
-  // ------------------------------------
-
   const handleManualAdd = () => { setItems([...items, { sku: '', name: '', price: 0, qty: 1, discount: 0 }]); setShowSearchModal(false); };
   const updateItem = (index, field, value) => { const newItems = [...items]; newItems[index][field] = value; setItems(newItems); };
   const removeItem = (index) => setItems(items.filter((_, i) => i !== index));
@@ -365,15 +409,38 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      {/* Скрытый инпут для камеры */}
+      {/* Скрытый инпут для выбора файла из галереи */}
       <input 
         type="file" 
         accept="image/*" 
-        capture="environment" 
         id="camera-input" 
         ref={cameraInputRef} 
-        onChange={processScannedImage} 
+        onChange={handleFileInputChange} 
       />
+
+      {/* ОВЕРЛЕЙ КАМЕРЫ */}
+      {showCamera && (
+        <div className="camera-overlay animate-fade-in">
+          <video ref={videoRef} autoPlay playsInline muted className="camera-video" />
+          
+          <div style={{ position:'absolute', top:'20px', right:'20px', zIndex:101 }}>
+            <button onClick={stopCamera} style={{ background:'rgba(0,0,0,0.5)', border:'none', borderRadius:'50%', padding:'10px', cursor:'pointer' }}>
+               <X color="white" size={24} />
+            </button>
+          </div>
+
+          <div className="camera-controls">
+            <button onClick={handleGalleryClick} style={{ background:'transparent', border:'none', cursor:'pointer', color:'white', display:'flex', flexDirection:'column', alignItems:'center', gap:'4px' }}>
+               <GalleryIcon size={28} />
+               <span style={{fontSize:'10px'}}>Галерея</span>
+            </button>
+            
+            <button onClick={takePhoto} className="shutter-btn"></button>
+            
+            <div style={{width:'28px'}}></div> {/* Spacer для центровки */}
+          </div>
+        </div>
+      )}
 
       {/* HEADER */}
       <div style={{ background:'rgba(255,255,255,0.9)', backdropFilter:'blur(10px)', padding:'16px', paddingBottom:'12px', borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:20 }}>
@@ -502,14 +569,14 @@ export default function App() {
                 <Search size={18} style={{ position:'absolute', left:'12px', top:'14px', color:'#9ca3af' }} />
                 <input autoFocus type="text" placeholder="Введите артикул" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSearch()} className="app-input" style={{ paddingLeft:'40px', paddingRight:'50px', fontSize:'16px', padding:'12px 12px 12px 40px' }} />
                 
-                {/* Кнопка сканирования внутри инпута */}
+                {/* Кнопка сканирования теперь открывает НАШУ камеру */}
                 <button 
-                  onClick={handleScanClick}
+                  onClick={startCamera}
                   className="app-btn-icon" 
-                  style={{ position:'absolute', right:'4px', top:'4px', bottom:'4px', height:'auto', color: isScanning ? '#2563eb' : '#6b7280' }}
-                  disabled={isScanning}
+                  style={{ position:'absolute', right:'4px', top:'4px', bottom:'4px', height:'auto', color: isProcessingOcr ? '#2563eb' : '#6b7280' }}
+                  disabled={isProcessingOcr}
                 >
-                  {isScanning ? <Loader2 size={20} className="animate-spin" /> : <ScanLine size={20} />}
+                  {isProcessingOcr ? <Loader2 size={20} className="animate-spin" /> : <ScanLine size={20} />}
                 </button>
              </div>
 
