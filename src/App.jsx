@@ -5,11 +5,11 @@ import {
   Sparkles, Percent, Wifi, RefreshCw, Loader2,
   Save, FolderOpen, RotateCcw, Clock, Download, Share, 
   Image as ImageIcon, Send, Share2, Camera, ChevronLeft, ChevronRight,
-  Scan, FileSearch
+  Scan, FileSearch, Hash
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "8.6 (Promo & Sample)"; 
+const APP_VERSION = "8.7 (Sku+Code)"; 
 const API_URL = ''; 
 const ITEMS_PER_PAGE = 6; 
 
@@ -81,17 +81,25 @@ const loadScript = (srcs, id) => {
 
 const ProductRow = ({ item, onUpdate, onRemove, index }) => {
   const finalPrice = item.price * (1 - (item.discount || 0) / 100);
-  const totalItemSum = Math.round(finalPrice * item.qty);
+  const totalItemSum = Math.round(finalPrice * item.qty); 
+  
   return (
     <div className="app-card app-card-sm animate-fade-in">
       <div className="flex-between" style={{ alignItems: 'flex-start', marginBottom: '8px' }}>
         <div style={{ flex: 1, marginRight: '8px' }}>
-           {item.sku && (
-             <span className="text-xs text-blue text-bold" style={{ backgroundColor: '#eff6ff', padding: '2px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
-               #{item.sku}
-               {item.isAiGenerated && <Sparkles size={8} />}
-             </span>
-           )}
+           <div style={{display:'flex', flexWrap:'wrap', gap:'4px', marginBottom:'4px'}}>
+             {item.sku && (
+               <span className="text-xs text-blue text-bold" style={{ backgroundColor: '#eff6ff', padding: '2px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                 #{item.sku}
+               </span>
+             )}
+             {item.code && (
+               <span className="text-xs text-gray text-bold" style={{ backgroundColor: '#f3f4f6', padding: '2px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                 Код: {item.code}
+               </span>
+             )}
+             {item.isAiGenerated && <Sparkles size={12} className="text-blue" />}
+           </div>
            <textarea rows={item.name.length > 30 ? 2 : 1} placeholder="Название товара..." value={item.name} onChange={(e) => onUpdate(index, 'name', e.target.value)} className="app-input-ghost text-sm text-bold" style={{ color: '#000000', resize: 'none', minHeight: '24px' }} />
         </div>
         <button onClick={() => onRemove(index)} className="app-btn-icon"><Trash2 size={18} /></button>
@@ -129,7 +137,7 @@ export default function App() {
   const [clientName, setClientName] = useState('');
   const [managerName, setManagerName] = useState('Менеджер Aquaplaza');
   const [globalDiscount, setGlobalDiscount] = useState(0);
-  const [items, setItems] = useState([{ sku: '32843000', name: 'Смеситель для кухни Grohe (Пример)', price: 12400, qty: 1, discount: 0, isAiGenerated: true }]);
+  const [items, setItems] = useState([{ sku: '32843000', code: '', name: 'Смеситель для кухни Grohe (Пример)', price: 12400, qty: 1, discount: 0, isAiGenerated: true }]);
   const [savedCPs, setSavedCPs] = useState([]);
   
   const receiptRef = useRef(null);
@@ -178,6 +186,7 @@ export default function App() {
       const itemPrice = Math.round(item.price * (1 - (item.discount || 0) / 100));
       text += `${i + 1}. ${item.name}\n`;
       if (item.sku) text += `   Арт: ${item.sku}\n`;
+      if (item.code) text += `   Код: ${item.code}\n`;
       text += `   ${item.qty} шт × ${itemPrice.toLocaleString()} ₽ = ${(itemPrice * item.qty).toLocaleString()} ₽\n\n`;
     });
     text += `------------------\n`;
@@ -188,6 +197,7 @@ export default function App() {
     return text;
   };
 
+  // --- ЗАГРУЗКА ---
   const ensureTesseract = async () => {
     if (window.Tesseract) return;
     setOcrStatus('Подкл. модули...');
@@ -202,6 +212,7 @@ export default function App() {
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js", "html2canvas-script");
   };
 
+  // --- КАМЕРА ---
   const startCamera = async () => {
     try {
       setIsProcessingOcr(true);
@@ -246,6 +257,7 @@ export default function App() {
     try {
       await ensureTesseract();
       setOcrStatus('Запуск OCR...');
+      
       const Tesseract = window.Tesseract;
       const worker = await Tesseract.createWorker({
         logger: m => {
@@ -257,11 +269,13 @@ export default function App() {
 
       await worker.loadLanguage('rus+eng');
       await worker.initialize('rus+eng');
+      
       const { data: { text } } = await worker.recognize(imageFile);
       console.log("OCR Result:", text);
       await worker.terminate();
 
       // --- АНАЛИЗ ТЕКСТА ---
+      
       // 1. Поиск ВСЕХ цен
       const priceRegex = /((?:\d{1,3}(?:[\s.,]\d{3})*|\d+)(?:[.,]\d+)?)\s*(?:руб|rub|₽)/gi;
       const prices = [];
@@ -273,31 +287,33 @@ export default function App() {
          if (!isNaN(cleanPrice) && cleanPrice > 0) prices.push(cleanPrice);
       }
 
-      // Триггер скидки: "образца" ИЛИ "акции"/"акция"
-      const isDiscounted = /образца|образец|акции|акция/i.test(text);
-      
+      const isSample = /образца|образец|акции|акция/i.test(text);
       let foundPrice = 0;
       let calculatedDiscount = 0;
 
-      if (isDiscounted && prices.length >= 2) {
-          // Сортируем цены: max - это старая цена, min - это цена со скидкой
+      if (isSample && prices.length >= 2) {
           prices.sort((a,b) => b - a);
           const originalPrice = prices[0];
-          const finalPrice = prices[prices.length - 1]; // Берем самую маленькую найденную (надежнее)
-          
+          const samplePrice = prices[prices.length - 1];
           foundPrice = originalPrice;
-          // Точный расчет скидки
-          calculatedDiscount = parseFloat(((1 - finalPrice/originalPrice) * 100).toFixed(2));
+          calculatedDiscount = parseFloat(((1 - samplePrice/originalPrice) * 100).toFixed(2));
       } else if (prices.length > 0) {
           foundPrice = prices[0];
       }
 
-      // 2. Артикул
-      const skuMatch = text.match(/(?:Артикул|Арт)[:.\s]*([A-Z0-9]{4,15})/i) || text.match(/\b([A-Z]{2}\d{4}[A-Z]{2})\b/); 
-      const codeMatch = text.match(/(?:Код|Code)[:.\s]*(\d{5,10})/i) || text.match(/\b00(\d{6})\b/); 
-      const foundSku = skuMatch ? skuMatch[1] : (codeMatch ? codeMatch[1] : '');
+      // 2. Поиск АРТИКУЛА (SKU)
+      const skuMatch = text.match(/(?:Артикул|Арт)[:.\s]*([A-Z0-9.\-/]{3,20})/i) || 
+                       text.match(/\b([A-Z]{2}\d{4}[A-Z]{2})\b/); 
+      
+      // 3. Поиск КОДА ТОВАРА
+      const codeMatch = text.match(/(?:Код|Code)(?:\s*товара)?[:.\s]*(\d{5,12})/i) ||
+                        text.match(/\b00(\d{6})\b/); 
 
-      // 3. Название
+      // Извлекаем значения (если найдены)
+      const foundSku = skuMatch ? skuMatch[1] : '';
+      const foundCode = codeMatch ? codeMatch[1] : '';
+
+      // 4. Поиск НАЗВАНИЯ
       const lines = text.split('\n');
       let nameStartIndex = 0;
       const collectionIndex = lines.findIndex(l => l.toLowerCase().includes('collection'));
@@ -315,24 +331,37 @@ export default function App() {
       });
 
       let foundName = cleanLines.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim();
-      if (!foundName) foundName = foundSku ? `Товар ${foundSku}` : "Товар с фото";
+      if (!foundName) foundName = foundSku ? `Товар ${foundSku}` : (foundCode ? `Товар ${foundCode}` : "Товар с фото");
 
-      if (foundPrice > 0 || foundSku.length > 3 || (foundName && foundName !== "Товар с фото")) {
-        // Проверка для алерта
+      // РЕЗУЛЬТАТ
+      if (foundPrice > 0 || foundSku || foundCode) {
         const finalCheck = Math.round(foundPrice * (1 - calculatedDiscount/100));
-        const msg = `Найдено:\n📦 ${foundName.substring(0, 50)}...\n💰 Цена: ${foundPrice.toLocaleString()} ₽\n📉 Скидка: ${calculatedDiscount}% (${isDiscounted ? 'Акция/Образец' : 'Нет'})\n💎 Итог: ${finalCheck.toLocaleString()} ₽\n\nДобавить?`;
         
-        if (window.confirm(msg)) {
-          setItems([...items, { sku: foundSku, name: foundName, price: foundPrice, qty: 1, discount: calculatedDiscount, isAiGenerated: true }]);
+        let confirmText = `Найдено:\n📦 ${foundName.substring(0, 50)}...\n💰 Цена: ${foundPrice.toLocaleString()} ₽\n`;
+        if (calculatedDiscount > 0) confirmText += `📉 Скидка: ${calculatedDiscount}%\n💎 Итог: ${finalCheck.toLocaleString()} ₽\n`;
+        if (foundSku) confirmText += `🔖 Арт: ${foundSku}\n`;
+        if (foundCode) confirmText += `🔢 Код: ${foundCode}\n`;
+        confirmText += `\nДобавить?`;
+
+        if (window.confirm(confirmText)) {
+          setItems([...items, { 
+            sku: foundSku, 
+            code: foundCode, 
+            name: foundName, 
+            price: foundPrice, 
+            qty: 1, 
+            discount: calculatedDiscount, 
+            isAiGenerated: true 
+          }]);
           setShowSearchModal(false);
         }
       } else {
-        alert("Текст не распознан.");
+        alert("Текст не распознан. Попробуйте четче.");
       }
 
     } catch (err) {
       console.error(err);
-      alert("Ошибка OCR.");
+      alert("Ошибка OCR. Проверьте интернет.");
     } finally {
       setIsProcessingOcr(false);
       setOcrStatus('');
@@ -340,6 +369,7 @@ export default function App() {
     }
   };
 
+  // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
   const handleShowImageForScreenshot = async () => {
     if (!receiptRef.current) return;
     try {
@@ -374,7 +404,7 @@ export default function App() {
             <button onClick={stopCamera} style={{background:'rgba(0,0,0,0.5)',border:'none',borderRadius:'50%',padding:10}}><X color="white"/></button>
           </div>
           <div className="camera-controls">
-            <button onClick={handleGalleryClick} style={{background:'transparent',border:'none',color:'white',display:'flex',flexDirection:'column',alignItems:'center'}}>
+            <button onClick={() => {cameraInputRef.current?.click(); stopCamera();}} style={{background:'transparent',border:'none',color:'white',display:'flex',flexDirection:'column',alignItems:'center'}}>
                <ImageIcon size={28}/><span style={{fontSize:10}}>Галерея</span>
             </button>
             <button onClick={takePhoto} className="shutter-btn"></button>
@@ -440,7 +470,10 @@ export default function App() {
                      <div key={i} className="flex-between" style={{marginBottom:12,alignItems:'flex-start'}}>
                        <div style={{flex:1,marginRight:12}}>
                          <div style={{fontSize:14,fontWeight:600}}>{item.name}</div>
-                         {item.sku && <div style={{fontSize:10,color:'#9ca3af'}}>Арт: {item.sku}</div>}
+                         <div style={{display:'flex',gap:8,fontSize:10,color:'#9ca3af'}}>
+                            {item.sku && <span>Арт: {item.sku}</span>}
+                            {item.code && <span>Код: {item.code}</span>}
+                         </div>
                        </div>
                        <div style={{textAlign:'right'}}>
                          <div style={{fontWeight:600}}>{Math.round(item.price * (1-(item.discount||0)/100)).toLocaleString()} ₽</div>
@@ -473,7 +506,7 @@ export default function App() {
                     {isProcessingOcr ? <span style={{fontSize:10,display:'flex',alignItems:'center',gap:4}}><Loader2 className="animate-spin" size={14}/> {ocrStatus || '...'}</span> : <Scan size={20}/>}
                  </button>
               </div>
-              <button onClick={() => {setItems([...items, {sku:'', name:'Новый товар', price:0, qty:1}]); setShowSearchModal(false);}} className="app-btn app-btn-secondary">Вручную</button>
+              <button onClick={() => {setItems([...items, {sku:'', code:'', name:'Новый товар', price:0, qty:1}]); setShowSearchModal(false);}} className="app-btn app-btn-secondary">Вручную</button>
            </div>
         </div>
       )}
