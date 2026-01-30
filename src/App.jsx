@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "8.5 (Exact Math)"; 
+const APP_VERSION = "8.6 (Promo & Sample)"; 
 const API_URL = ''; 
 const ITEMS_PER_PAGE = 6; 
 
@@ -80,10 +80,8 @@ const loadScript = (srcs, id) => {
 };
 
 const ProductRow = ({ item, onUpdate, onRemove, index }) => {
-  // Исправлено: Округляем сумму до целого, чтобы 4999.95 стало 5000
   const finalPrice = item.price * (1 - (item.discount || 0) / 100);
-  const totalItemSum = Math.round(finalPrice * item.qty); 
-  
+  const totalItemSum = Math.round(finalPrice * item.qty);
   return (
     <div className="app-card app-card-sm animate-fade-in">
       <div className="flex-between" style={{ alignItems: 'flex-start', marginBottom: '8px' }}>
@@ -177,13 +175,12 @@ export default function App() {
     let text = `🌊 *Aquaplaza* | КП от ${date}\n`;
     if (clientName) text += `👤 Клиент: ${clientName}\n\n`;
     items.forEach((item, i) => {
-      const itemPrice = Math.round(item.price * (1 - (item.discount || 0) / 100)); // Округляем здесь тоже
+      const itemPrice = Math.round(item.price * (1 - (item.discount || 0) / 100));
       text += `${i + 1}. ${item.name}\n`;
       if (item.sku) text += `   Арт: ${item.sku}\n`;
       text += `   ${item.qty} шт × ${itemPrice.toLocaleString()} ₽ = ${(itemPrice * item.qty).toLocaleString()} ₽\n\n`;
     });
     text += `------------------\n`;
-    // Суммируем округленные суммы
     const sub = items.reduce((s, i) => s + Math.round(i.price * (1 - (i.discount||0)/100) * i.qty), 0);
     const tot = Math.round(sub * (1 - globalDiscount/100));
     text += `💎 *ИТОГО: ${tot.toLocaleString()} ₽*\n\n`;
@@ -191,7 +188,6 @@ export default function App() {
     return text;
   };
 
-  // --- ЗАГРУЗКА ---
   const ensureTesseract = async () => {
     if (window.Tesseract) return;
     setOcrStatus('Подкл. модули...');
@@ -206,7 +202,6 @@ export default function App() {
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js", "html2canvas-script");
   };
 
-  // --- КАМЕРА ---
   const startCamera = async () => {
     try {
       setIsProcessingOcr(true);
@@ -251,64 +246,58 @@ export default function App() {
     try {
       await ensureTesseract();
       setOcrStatus('Запуск OCR...');
-      
       const Tesseract = window.Tesseract;
       const worker = await Tesseract.createWorker({
         logger: m => {
-          if (m.status === 'recognizing text') setOcrStatus(`Читаю текст: ${Math.round(m.progress * 100)}%`);
-          else if (m.status.includes('loading')) setOcrStatus('Загрузка словаря...');
+          if (m.status === 'recognizing text') setOcrStatus(`Читаю: ${Math.round(m.progress * 100)}%`);
+          else if (m.status.includes('loading')) setOcrStatus('Словарь...');
           else setOcrStatus(m.status);
         }
       });
 
       await worker.loadLanguage('rus+eng');
       await worker.initialize('rus+eng');
-      
       const { data: { text } } = await worker.recognize(imageFile);
       console.log("OCR Result:", text);
       await worker.terminate();
 
       // --- АНАЛИЗ ТЕКСТА ---
-      
-      // 1. Поиск ВСЕХ цен с учетом пробелов (9 970)
+      // 1. Поиск ВСЕХ цен
       const priceRegex = /((?:\d{1,3}(?:[\s.,]\d{3})*|\d+)(?:[.,]\d+)?)\s*(?:руб|rub|₽)/gi;
       const prices = [];
       let match;
       while ((match = priceRegex.exec(text)) !== null) {
-         let raw = match[1];
-         // Удаляем пробелы и меняем запятые на точки
-         raw = raw.replace(/\s/g, '').replace(',', '.');
-         // Убираем точку в конце если она разделитель тысяч (например 9.970)
+         let raw = match[1].replace(/\s/g, '').replace(',', '.');
          if (/\.\d{3}$/.test(raw)) raw = raw.replace('.', '');
-         
          const cleanPrice = parseFloat(raw);
          if (!isNaN(cleanPrice) && cleanPrice > 0) prices.push(cleanPrice);
       }
 
-      const isSample = /образца|образец/i.test(text);
+      // Триггер скидки: "образца" ИЛИ "акции"/"акция"
+      const isDiscounted = /образца|образец|акции|акция/i.test(text);
       
       let foundPrice = 0;
       let calculatedDiscount = 0;
 
-      if (isSample && prices.length >= 2) {
-          // Сортируем: [9970, 5000]
+      if (isDiscounted && prices.length >= 2) {
+          // Сортируем цены: max - это старая цена, min - это цена со скидкой
           prices.sort((a,b) => b - a);
           const originalPrice = prices[0];
-          const samplePrice = prices[prices.length - 1];
+          const finalPrice = prices[prices.length - 1]; // Берем самую маленькую найденную (надежнее)
           
           foundPrice = originalPrice;
-          // Точный расчет скидки: (1 - 5000/9970) * 100 = 49.85...
-          calculatedDiscount = parseFloat(((1 - samplePrice/originalPrice) * 100).toFixed(2));
+          // Точный расчет скидки
+          calculatedDiscount = parseFloat(((1 - finalPrice/originalPrice) * 100).toFixed(2));
       } else if (prices.length > 0) {
           foundPrice = prices[0];
       }
 
-      // 2. Поиск артикула
+      // 2. Артикул
       const skuMatch = text.match(/(?:Артикул|Арт)[:.\s]*([A-Z0-9]{4,15})/i) || text.match(/\b([A-Z]{2}\d{4}[A-Z]{2})\b/); 
       const codeMatch = text.match(/(?:Код|Code)[:.\s]*(\d{5,10})/i) || text.match(/\b00(\d{6})\b/); 
       const foundSku = skuMatch ? skuMatch[1] : (codeMatch ? codeMatch[1] : '');
 
-      // 3. Поиск названия
+      // 3. Название
       const lines = text.split('\n');
       let nameStartIndex = 0;
       const collectionIndex = lines.findIndex(l => l.toLowerCase().includes('collection'));
@@ -329,21 +318,21 @@ export default function App() {
       if (!foundName) foundName = foundSku ? `Товар ${foundSku}` : "Товар с фото";
 
       if (foundPrice > 0 || foundSku.length > 3 || (foundName && foundName !== "Товар с фото")) {
-        // Проверяем математику для сообщения
+        // Проверка для алерта
         const finalCheck = Math.round(foundPrice * (1 - calculatedDiscount/100));
-        const msg = `Найдено:\n📦 ${foundName.substring(0, 50)}...\n💰 Цена: ${foundPrice.toLocaleString()} ₽\n📉 Скидка: ${calculatedDiscount}%\n💎 Итог: ${finalCheck.toLocaleString()} ₽\n🔖 Арт: ${foundSku}\n\nДобавить?`;
+        const msg = `Найдено:\n📦 ${foundName.substring(0, 50)}...\n💰 Цена: ${foundPrice.toLocaleString()} ₽\n📉 Скидка: ${calculatedDiscount}% (${isDiscounted ? 'Акция/Образец' : 'Нет'})\n💎 Итог: ${finalCheck.toLocaleString()} ₽\n\nДобавить?`;
         
         if (window.confirm(msg)) {
           setItems([...items, { sku: foundSku, name: foundName, price: foundPrice, qty: 1, discount: calculatedDiscount, isAiGenerated: true }]);
           setShowSearchModal(false);
         }
       } else {
-        alert("Данные не распознаны. Попробуйте еще раз.");
+        alert("Текст не распознан.");
       }
 
     } catch (err) {
       console.error(err);
-      alert("Ошибка OCR. Проверьте интернет.");
+      alert("Ошибка OCR.");
     } finally {
       setIsProcessingOcr(false);
       setOcrStatus('');
@@ -351,7 +340,6 @@ export default function App() {
     }
   };
 
-  // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
   const handleShowImageForScreenshot = async () => {
     if (!receiptRef.current) return;
     try {
@@ -365,7 +353,6 @@ export default function App() {
 
   const handleSaveToHistory = () => {
     if (!clientName) { alert('Введите имя клиента'); return; }
-    // Суммируем с учетом округления каждой позиции
     const sub = items.reduce((s, i) => s + Math.round(i.price * (1 - (i.discount||0)/100) * i.qty), 0);
     const newCP = { id: Date.now(), date: new Date().toLocaleDateString(), clientName, managerName, items, globalDiscount, total: Math.round(sub * (1 - globalDiscount/100)) };
     setSavedCPs([newCP, ...savedCPs]);
@@ -373,9 +360,12 @@ export default function App() {
     alert('Сохранено');
   };
 
+  const handleFileInputChange = (e) => { if (e.target.files && e.target.files[0]) processOcr(e.target.files[0]); };
+  const handleGalleryClick = () => { cameraInputRef.current?.click(); stopCamera(); };
+
   return (
     <div className="min-h-screen">
-      <input type="file" accept="image/*" id="camera-input" ref={cameraInputRef} onChange={(e) => e.target.files?.[0] && processOcr(e.target.files[0])} />
+      <input type="file" accept="image/*" id="camera-input" ref={cameraInputRef} onChange={handleFileInputChange} />
 
       {showCamera && (
         <div className="camera-overlay animate-fade-in">
@@ -384,7 +374,7 @@ export default function App() {
             <button onClick={stopCamera} style={{background:'rgba(0,0,0,0.5)',border:'none',borderRadius:'50%',padding:10}}><X color="white"/></button>
           </div>
           <div className="camera-controls">
-            <button onClick={() => {cameraInputRef.current?.click(); stopCamera();}} style={{background:'transparent',border:'none',color:'white',display:'flex',flexDirection:'column',alignItems:'center'}}>
+            <button onClick={handleGalleryClick} style={{background:'transparent',border:'none',color:'white',display:'flex',flexDirection:'column',alignItems:'center'}}>
                <ImageIcon size={28}/><span style={{fontSize:10}}>Галерея</span>
             </button>
             <button onClick={takePhoto} className="shutter-btn"></button>
