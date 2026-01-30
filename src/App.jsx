@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "8.2 (Smart Name)"; 
+const APP_VERSION = "8.3 (Sample Price)"; 
 const API_URL = ''; 
 const ITEMS_PER_PAGE = 6; 
 
@@ -274,11 +274,37 @@ export default function App() {
 
       // --- АНАЛИЗ ТЕКСТА ---
       
-      // 1. Поиск цены
-      const priceMatch = text.match(/(\d[\d\s]*)\s*(?:руб|rub|₽)/i);
+      // 1. Поиск ВСЕХ цен
+      const priceRegex = /(\d[\d\s]*[.,]?\d*)\s*(?:руб|rub|₽)/gi;
+      const prices = [];
+      let match;
+      while ((match = priceRegex.exec(text)) !== null) {
+         // Чистим цену от пробелов и меняем запятую на точку
+         const cleanPrice = parseFloat(match[1].replace(/\s/g, '').replace(',', '.'));
+         if (!isNaN(cleanPrice) && cleanPrice > 0) {
+            prices.push(cleanPrice);
+         }
+      }
+
+      // Определяем, есть ли слово "образца"
+      const isSample = /образца/i.test(text);
+      
       let foundPrice = 0;
-      if (priceMatch) {
-        foundPrice = parseFloat(priceMatch[1].replace(/\s/g, '').replace(',', '.'));
+      let calculatedDiscount = 0;
+
+      if (isSample && prices.length >= 2) {
+          // Если это ценник образца и нашли 2+ цены:
+          // Сортируем: Большая - это старая цена, Меньшая - это цена образца
+          prices.sort((a,b) => b - a); // По убыванию
+          const originalPrice = prices[0];
+          const samplePrice = prices[prices.length - 1]; // Самая низкая найденная
+          
+          foundPrice = originalPrice;
+          // Считаем скидку, чтобы получить samplePrice
+          calculatedDiscount = Math.round((1 - samplePrice/originalPrice) * 100);
+      } else if (prices.length > 0) {
+          // Если обычный ценник, берем первую (обычно верхнюю) или самую большую
+          foundPrice = prices[0];
       }
 
       // 2. Поиск артикула
@@ -291,8 +317,6 @@ export default function App() {
 
       // 3. ПОИСК НАЗВАНИЯ (Исправленная логика: после слова "collection")
       const lines = text.split('\n');
-      
-      // Ищем строку с "collection"
       let nameStartIndex = 0;
       const collectionIndex = lines.findIndex(l => l.toLowerCase().includes('collection'));
       if (collectionIndex !== -1) {
@@ -302,28 +326,27 @@ export default function App() {
       const cleanLines = lines.slice(nameStartIndex).filter(line => {
         const l = line.trim().toLowerCase();
         if (l.length < 3) return false;
-        // Доп. фильтры мусора
         if (l.includes('aqua plaza')) return false; 
         if (l.includes('артикул')) return false;
         if (l.includes('код товара')) return false;
         if (l.includes('ooo')) return false;
         if (l.includes('гармония')) return false;
-        if (/\d{2}\.\d{2}\.\d{4}/.test(l)) return false; // Дата
-        if (priceMatch && line.includes(priceMatch[1])) return false; // Цена
-        if (/^\d+$/.test(l)) return false; // Просто цифры
+        if (/\d{2}\.\d{2}\.\d{4}/.test(l)) return false; 
+        // Если строка содержит найденную цену - пропускаем
+        if (prices.some(p => l.includes(p.toString()) || l.replace(/\s/g,'').includes(p.toString()))) return false;
+        if (/^\d+$/.test(l)) return false; 
         if (l.includes('руб') || l.includes('rub') || l.includes('₽')) return false;
         return true;
       });
 
-      // Берем первые 3 строки ПОСЛЕ "collection"
       let foundName = cleanLines.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim();
-      
       if (!foundName) foundName = foundSku ? `Товар ${foundSku}` : "Товар с фото";
 
+      // 4. РЕЗУЛЬТАТ
       if (foundPrice > 0 || foundSku.length > 3 || (foundName && foundName !== "Товар с фото")) {
-        const msg = `Найдено:\n📦 ${foundName.substring(0, 50)}...\n💰 ${foundPrice} ₽\n🔖 ${foundSku}\n\nДобавить?`;
+        const msg = `Найдено:\n📦 ${foundName.substring(0, 50)}...\n💰 ${foundPrice.toLocaleString()} ₽ ${calculatedDiscount > 0 ? `(-${calculatedDiscount}%)` : ''}\n🔖 ${foundSku}\n\nДобавить?`;
         if (window.confirm(msg)) {
-          setItems([...items, { sku: foundSku, name: foundName, price: foundPrice, qty: 1, discount: 0, isAiGenerated: true }]);
+          setItems([...items, { sku: foundSku, name: foundName, price: foundPrice, qty: 1, discount: calculatedDiscount, isAiGenerated: true }]);
           setShowSearchModal(false);
         }
       } else {
