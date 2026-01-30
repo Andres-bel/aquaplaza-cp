@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 
 // --- НАСТРОЙКИ ---
-const APP_VERSION = "8.3 (Sample Price)"; 
+const APP_VERSION = "8.5 (Exact Math)"; 
 const API_URL = ''; 
 const ITEMS_PER_PAGE = 6; 
 
@@ -80,8 +80,10 @@ const loadScript = (srcs, id) => {
 };
 
 const ProductRow = ({ item, onUpdate, onRemove, index }) => {
+  // Исправлено: Округляем сумму до целого, чтобы 4999.95 стало 5000
   const finalPrice = item.price * (1 - (item.discount || 0) / 100);
-  const totalItemSum = finalPrice * item.qty;
+  const totalItemSum = Math.round(finalPrice * item.qty); 
+  
   return (
     <div className="app-card app-card-sm animate-fade-in">
       <div className="flex-between" style={{ alignItems: 'flex-start', marginBottom: '8px' }}>
@@ -118,7 +120,7 @@ export default function App() {
   
   // OCR States
   const [showCamera, setShowCamera] = useState(false);
-  const [ocrStatus, setOcrStatus] = useState(''); // Текстовый статус для UI
+  const [ocrStatus, setOcrStatus] = useState(''); 
   const [isProcessingOcr, setIsProcessingOcr] = useState(false);
   
   const [showImageModal, setShowImageModal] = useState(false);
@@ -175,14 +177,15 @@ export default function App() {
     let text = `🌊 *Aquaplaza* | КП от ${date}\n`;
     if (clientName) text += `👤 Клиент: ${clientName}\n\n`;
     items.forEach((item, i) => {
-      const itemPrice = item.price * (1 - (item.discount || 0) / 100);
+      const itemPrice = Math.round(item.price * (1 - (item.discount || 0) / 100)); // Округляем здесь тоже
       text += `${i + 1}. ${item.name}\n`;
       if (item.sku) text += `   Арт: ${item.sku}\n`;
       text += `   ${item.qty} шт × ${itemPrice.toLocaleString()} ₽ = ${(itemPrice * item.qty).toLocaleString()} ₽\n\n`;
     });
     text += `------------------\n`;
-    const sub = items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0);
-    const tot = sub * (1 - globalDiscount/100);
+    // Суммируем округленные суммы
+    const sub = items.reduce((s, i) => s + Math.round(i.price * (1 - (i.discount||0)/100) * i.qty), 0);
+    const tot = Math.round(sub * (1 - globalDiscount/100));
     text += `💎 *ИТОГО: ${tot.toLocaleString()} ₽*\n\n`;
     text += `📞 Ваш менеджер: ${managerName}`;
     return text;
@@ -250,18 +253,11 @@ export default function App() {
       setOcrStatus('Запуск OCR...');
       
       const Tesseract = window.Tesseract;
-      
       const worker = await Tesseract.createWorker({
         logger: m => {
-          if (m.status === 'recognizing text') {
-            setOcrStatus(`Читаю текст: ${Math.round(m.progress * 100)}%`);
-          } else if (m.status === 'loading tesseract core') {
-            setOcrStatus('Гружу ядро...');
-          } else if (m.status.includes('loading language')) {
-            setOcrStatus('Качаю словарь...');
-          } else {
-            setOcrStatus(m.status);
-          }
+          if (m.status === 'recognizing text') setOcrStatus(`Читаю текст: ${Math.round(m.progress * 100)}%`);
+          else if (m.status.includes('loading')) setOcrStatus('Загрузка словаря...');
+          else setOcrStatus(m.status);
         }
       });
 
@@ -274,66 +270,56 @@ export default function App() {
 
       // --- АНАЛИЗ ТЕКСТА ---
       
-      // 1. Поиск ВСЕХ цен
-      const priceRegex = /(\d[\d\s]*[.,]?\d*)\s*(?:руб|rub|₽)/gi;
+      // 1. Поиск ВСЕХ цен с учетом пробелов (9 970)
+      const priceRegex = /((?:\d{1,3}(?:[\s.,]\d{3})*|\d+)(?:[.,]\d+)?)\s*(?:руб|rub|₽)/gi;
       const prices = [];
       let match;
       while ((match = priceRegex.exec(text)) !== null) {
-         // Чистим цену от пробелов и меняем запятую на точку
-         const cleanPrice = parseFloat(match[1].replace(/\s/g, '').replace(',', '.'));
-         if (!isNaN(cleanPrice) && cleanPrice > 0) {
-            prices.push(cleanPrice);
-         }
+         let raw = match[1];
+         // Удаляем пробелы и меняем запятые на точки
+         raw = raw.replace(/\s/g, '').replace(',', '.');
+         // Убираем точку в конце если она разделитель тысяч (например 9.970)
+         if (/\.\d{3}$/.test(raw)) raw = raw.replace('.', '');
+         
+         const cleanPrice = parseFloat(raw);
+         if (!isNaN(cleanPrice) && cleanPrice > 0) prices.push(cleanPrice);
       }
 
-      // Определяем, есть ли слово "образца"
-      const isSample = /образца/i.test(text);
+      const isSample = /образца|образец/i.test(text);
       
       let foundPrice = 0;
       let calculatedDiscount = 0;
 
       if (isSample && prices.length >= 2) {
-          // Если это ценник образца и нашли 2+ цены:
-          // Сортируем: Большая - это старая цена, Меньшая - это цена образца
-          prices.sort((a,b) => b - a); // По убыванию
+          // Сортируем: [9970, 5000]
+          prices.sort((a,b) => b - a);
           const originalPrice = prices[0];
-          const samplePrice = prices[prices.length - 1]; // Самая низкая найденная
+          const samplePrice = prices[prices.length - 1];
           
           foundPrice = originalPrice;
-          // Считаем скидку, чтобы получить samplePrice
-          calculatedDiscount = Math.round((1 - samplePrice/originalPrice) * 100);
+          // Точный расчет скидки: (1 - 5000/9970) * 100 = 49.85...
+          calculatedDiscount = parseFloat(((1 - samplePrice/originalPrice) * 100).toFixed(2));
       } else if (prices.length > 0) {
-          // Если обычный ценник, берем первую (обычно верхнюю) или самую большую
           foundPrice = prices[0];
       }
 
       // 2. Поиск артикула
-      const skuMatch = text.match(/(?:Артикул|Арт)[:.\s]*([A-Z0-9]{4,15})/i) || 
-                       text.match(/\b([A-Z]{2}\d{4}[A-Z]{2})\b/); 
-      const codeMatch = text.match(/(?:Код|Code)[:.\s]*(\d{5,10})/i) ||
-                        text.match(/\b00(\d{6})\b/); 
-
+      const skuMatch = text.match(/(?:Артикул|Арт)[:.\s]*([A-Z0-9]{4,15})/i) || text.match(/\b([A-Z]{2}\d{4}[A-Z]{2})\b/); 
+      const codeMatch = text.match(/(?:Код|Code)[:.\s]*(\d{5,10})/i) || text.match(/\b00(\d{6})\b/); 
       const foundSku = skuMatch ? skuMatch[1] : (codeMatch ? codeMatch[1] : '');
 
-      // 3. ПОИСК НАЗВАНИЯ (Исправленная логика: после слова "collection")
+      // 3. Поиск названия
       const lines = text.split('\n');
       let nameStartIndex = 0;
       const collectionIndex = lines.findIndex(l => l.toLowerCase().includes('collection'));
-      if (collectionIndex !== -1) {
-        nameStartIndex = collectionIndex + 1; // Начинаем поиск СЛЕДУЮЩЕЙ строкой
-      }
+      if (collectionIndex !== -1) nameStartIndex = collectionIndex + 1;
 
       const cleanLines = lines.slice(nameStartIndex).filter(line => {
         const l = line.trim().toLowerCase();
         if (l.length < 3) return false;
-        if (l.includes('aqua plaza')) return false; 
-        if (l.includes('артикул')) return false;
-        if (l.includes('код товара')) return false;
-        if (l.includes('ooo')) return false;
-        if (l.includes('гармония')) return false;
-        if (/\d{2}\.\d{2}\.\d{4}/.test(l)) return false; 
-        // Если строка содержит найденную цену - пропускаем
-        if (prices.some(p => l.includes(p.toString()) || l.replace(/\s/g,'').includes(p.toString()))) return false;
+        if (l.includes('aqua plaza') || l.includes('артикул') || l.includes('код товара')) return false;
+        if (l.includes('ooo') || l.includes('гармония') || /\d{2}\.\d{2}\.\d{4}/.test(l)) return false; 
+        if (prices.some(p => l.replace(/\s/g,'').includes(p.toString()))) return false;
         if (/^\d+$/.test(l)) return false; 
         if (l.includes('руб') || l.includes('rub') || l.includes('₽')) return false;
         return true;
@@ -342,15 +328,17 @@ export default function App() {
       let foundName = cleanLines.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim();
       if (!foundName) foundName = foundSku ? `Товар ${foundSku}` : "Товар с фото";
 
-      // 4. РЕЗУЛЬТАТ
       if (foundPrice > 0 || foundSku.length > 3 || (foundName && foundName !== "Товар с фото")) {
-        const msg = `Найдено:\n📦 ${foundName.substring(0, 50)}...\n💰 ${foundPrice.toLocaleString()} ₽ ${calculatedDiscount > 0 ? `(-${calculatedDiscount}%)` : ''}\n🔖 ${foundSku}\n\nДобавить?`;
+        // Проверяем математику для сообщения
+        const finalCheck = Math.round(foundPrice * (1 - calculatedDiscount/100));
+        const msg = `Найдено:\n📦 ${foundName.substring(0, 50)}...\n💰 Цена: ${foundPrice.toLocaleString()} ₽\n📉 Скидка: ${calculatedDiscount}%\n💎 Итог: ${finalCheck.toLocaleString()} ₽\n🔖 Арт: ${foundSku}\n\nДобавить?`;
+        
         if (window.confirm(msg)) {
           setItems([...items, { sku: foundSku, name: foundName, price: foundPrice, qty: 1, discount: calculatedDiscount, isAiGenerated: true }]);
           setShowSearchModal(false);
         }
       } else {
-        alert("Текст не распознан. Попробуйте четче.");
+        alert("Данные не распознаны. Попробуйте еще раз.");
       }
 
     } catch (err) {
@@ -377,8 +365,9 @@ export default function App() {
 
   const handleSaveToHistory = () => {
     if (!clientName) { alert('Введите имя клиента'); return; }
-    const sub = items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0);
-    const newCP = { id: Date.now(), date: new Date().toLocaleDateString(), clientName, managerName, items, globalDiscount, total: sub * (1 - globalDiscount/100) };
+    // Суммируем с учетом округления каждой позиции
+    const sub = items.reduce((s, i) => s + Math.round(i.price * (1 - (i.discount||0)/100) * i.qty), 0);
+    const newCP = { id: Date.now(), date: new Date().toLocaleDateString(), clientName, managerName, items, globalDiscount, total: Math.round(sub * (1 - globalDiscount/100)) };
     setSavedCPs([newCP, ...savedCPs]);
     try { localStorage.setItem('aquaplaza_history', JSON.stringify([newCP, ...savedCPs])); } catch(e){}
     alert('Сохранено');
@@ -436,7 +425,7 @@ export default function App() {
 
             <div className="app-card">
               <div className="flex-between"><span className="text-sm text-gray">Общая скидка</span><div style={{display:'flex',alignItems:'center',background:'#fff7ed',padding:'0 8px',borderRadius:8}}><input type="number" value={globalDiscount} onChange={(e)=>setGlobalDiscount(parseFloat(e.target.value)||0)} className="app-input-ghost text-bold text-orange" style={{width:30,textAlign:'right'}} /><span className="text-orange">%</span></div></div>
-              <div className="flex-between" style={{marginTop:12,paddingTop:12,borderTop:'1px solid #f3f4f6'}}><span className="text-bold">Итого</span><span style={{fontSize:20,fontWeight:800}}>{(items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0) * (1 - globalDiscount/100)).toLocaleString()} ₽</span></div>
+              <div className="flex-between" style={{marginTop:12,paddingTop:12,borderTop:'1px solid #f3f4f6'}}><span className="text-bold">Итого</span><span style={{fontSize:20,fontWeight:800}}>{(items.reduce((s, i) => s + Math.round(i.price * (1 - (i.discount||0)/100) * i.qty), 0) * (1 - globalDiscount/100)).toLocaleString()} ₽</span></div>
             </div>
             
             <div style={{ display:'flex', gap:8 }}>
@@ -450,7 +439,7 @@ export default function App() {
              <div ref={receiptRef} className="app-card" style={{padding:0,overflow:'hidden',minHeight:400}}>
                 <div style={{background:'#2563eb',padding:24,color:'white'}}>
                    <div style={{opacity:0.8,fontSize:12,textTransform:'uppercase',marginBottom:16}}>Коммерческое предложение</div>
-                   <div style={{fontSize:32,fontWeight:'bold'}}>{(items.reduce((s, i) => s + (i.price * (1 - (i.discount||0)/100) * i.qty), 0) * (1 - globalDiscount/100)).toLocaleString()} ₽</div>
+                   <div style={{fontSize:32,fontWeight:'bold'}}>{Math.round(items.reduce((s, i) => s + Math.round(i.price * (1 - (i.discount||0)/100) * i.qty), 0) * (1 - globalDiscount/100)).toLocaleString()} ₽</div>
                 </div>
                 <div style={{padding:20}}>
                    <div className="flex-between" style={{marginBottom:24,borderBottom:'1px solid #f3f4f6',paddingBottom:16}}>
@@ -464,7 +453,7 @@ export default function App() {
                          {item.sku && <div style={{fontSize:10,color:'#9ca3af'}}>Арт: {item.sku}</div>}
                        </div>
                        <div style={{textAlign:'right'}}>
-                         <div style={{fontWeight:600}}>{(item.price * (1-(item.discount||0)/100)).toLocaleString()} ₽</div>
+                         <div style={{fontWeight:600}}>{Math.round(item.price * (1-(item.discount||0)/100)).toLocaleString()} ₽</div>
                          <div style={{fontSize:10,color:'#9ca3af'}}>{item.qty} шт</div>
                        </div>
                      </div>
